@@ -54,6 +54,8 @@ let view = 'home'
 let helpFrom = 'home'
 let settingsDraft = { ...data.settings }
 let savedNotice = ''
+let pendingDeleteId: string | null = null
+let historyNotice = ''
 
 function esc(value: string): string {
   return value.replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!)
@@ -187,7 +189,7 @@ function renderHelp(from = 'home'): void {
     <div class="mantra">十球再记，不逐球填；<br/>一次只改一个变量；<br/>当场变好，不等于学会；<br/>看录像以后，再决定下一步。</div>
     <section class="help-section"><span class="number">01</span><div><h2>IPTPA L2｜四组放小球</h2><p>点“开始训练”后确认当前方向，手机放一边。完成 10 球，再点进目标区的成功数。应用自动进入下一组，依次完成正手直线、正手斜线、反手直线、反手斜线。最后看四组汇总和需要继续观察的弱项。</p><p>单次达到 8/10 只是本次成绩，不等于已经稳定掌握。</p></div></section>
     <section class="help-section"><span class="number">02</span><div><h2>重置球容易飞高｜个人实验</h2><p>先做基线 1、基线 2，各 10 球；再做变量 1–3，各 10 球。基线组不显示提示；变量组只提示“来球到达前，拍面已经朝向目标落点呈现”。本轮只改变拍面呈现时机。</p><p>“看不清”指无法判断该球是否成功；“无效喂球”指来球明显偏离预定练习条件，无法正常完成击球。这两类不算失败，会从成功率分母中排除。典型球可点“标记典型球”，自动记录时间，建议稍后结合录像回看。</p><p>结果只写本次训练表现差异，不证明变量导致变化。下一次做保持测试，取消提示观察表现能否保留。</p></div></section>
-    <section class="help-section"><span class="number">03</span><div><h2>发球机与本机数据</h2><p>发球机设置首次使用或设置变化时修改即可，保存后长期复用。训练历史和设置保存在本机浏览器的本地数据库中；关闭后仍在这台设备上，无账号、后端或云同步。清除浏览器网站数据会删除本地记录。</p></div></section>
+    <section class="help-section"><span class="number">03</span><div><h2>发球机与本机数据</h2><p>发球机设置首次使用或设置变化时修改即可，保存后长期复用。训练历史和设置保存在本机浏览器的本地数据库中；关闭后仍在这台设备上，无账号、后端或云同步。清除浏览器网站数据会删除本地记录。</p><p>记错一条：在“训练历史”里点该条记录下方的“删除这条记录”，再点“确认删除”即可，只删这一条，其他记录不受影响，删除后无法恢复。</p></div></section>
     <section class="help-section"><span class="number">04</span><div><h2>添加到 iPhone 主屏幕</h2><p>用 Safari 打开部署网址 → 点分享 → 选择“添加到主屏幕” → 点“添加”。首次打开联网后会缓存应用；之后断网仍可打开已缓存版本。训练过程中不会自动刷新应用。</p><p>当前版本暂不包含人工智能自动诊断、逐球识别、苹果手表、云同步或全部 23 项认证训练。</p></div></section>
     <button class="primary-button page-bottom-button" data-action="help-done">${from === 'home' ? '回到首页' : '返回训练'}</button>`, from === 'training' ? 'training' : 'home')
 }
@@ -208,8 +210,15 @@ function renderSettings(): void {
 
 function renderHistory(): void {
   const sessions = data.sessions.slice().sort((a, b) => (b.completedAt ?? b.startedAt).localeCompare(a.completedAt ?? a.startedAt))
-  const cards = sessions.map((session) => `<article class="history-card"><div class="history-meta"><span class="tag">${session.kind === 'iptpa' ? 'IPTPA L2' : '个人技术实验'}</span><time>${dateLabel(session.completedAt ?? session.startedAt)}</time></div><div class="history-scores">${session.groups.map((group) => `<span><b>${esc(group.name)}</b>${group.success ?? 0}<small>/${10 - group.unclear - group.invalid}</small></span>`).join('')}</div><p>${esc(summaryFor(session))}</p></article>`).join('')
-  shell(`<section class="page-intro compact"><span class="eyebrow">留给下一次的线索</span><h1>训练历史</h1><p>记录表现，不急着替技术下结论。</p></section>${sessions.length ? `<div class="history-list">${cards}</div>` : `<div class="empty-state"><span>▤</span><h2>还没有训练记录</h2><p>完成一次训练后，日期、各组成绩和摘要会显示在这里。</p><button class="secondary-button" data-action="navigate" data-to="home">开始第一次训练</button></div>`}`)
+  if (pendingDeleteId && !sessions.some((session) => session.id === pendingDeleteId)) pendingDeleteId = null
+  const cards = sessions.map((session) => {
+    const deleting = session.id === pendingDeleteId
+    const footer = deleting
+      ? `<div class="delete-confirm"><p>确定删除这条记录？删除后无法恢复，其他记录不受影响。</p><div class="delete-confirm-actions"><button class="delete-confirm-button" data-action="delete-confirm" data-id="${esc(session.id)}">确认删除</button><button class="secondary-button delete-cancel-button" data-action="delete-cancel">取消</button></div></div>`
+      : `<div class="history-actions"><button class="delete-button" data-action="delete-request" data-id="${esc(session.id)}">删除这条记录</button></div>`
+    return `<article class="history-card"><div class="history-meta"><span class="tag">${session.kind === 'iptpa' ? 'IPTPA L2' : '个人技术实验'}</span><time>${dateLabel(session.completedAt ?? session.startedAt)}</time></div><div class="history-scores">${session.groups.map((group) => `<span><b>${esc(group.name)}</b>${group.success ?? 0}<small>/${10 - group.unclear - group.invalid}</small></span>`).join('')}</div><p>${esc(summaryFor(session))}</p>${footer}</article>`
+  }).join('')
+  shell(`<section class="page-intro compact"><span class="eyebrow">留给下一次的线索</span><h1>训练历史</h1><p>记录表现，不急着替技术下结论。</p></section>${historyNotice ? `<div class="save-notice">✓ ${esc(historyNotice)}</div>` : ''}${sessions.length ? `<div class="history-list">${cards}</div>` : `<div class="empty-state"><span>▤</span><h2>还没有训练记录</h2><p>完成一次训练后，日期、各组成绩和摘要会显示在这里。</p><button class="secondary-button" data-action="navigate" data-to="home">开始第一次训练</button></div>`}`)
 }
 
 function render(): void {
@@ -224,7 +233,18 @@ function bind(): void {
   app.querySelectorAll<HTMLElement>('[data-action]').forEach((element) => {
     element.addEventListener('click', () => {
       const action = element.dataset.action
-      if (action === 'navigate') { savedNotice = ''; setView(element.dataset.to ?? 'home') }
+      if (action === 'navigate') { savedNotice = ''; historyNotice = ''; pendingDeleteId = null; setView(element.dataset.to ?? 'home') }
+      if (action === 'delete-request') { pendingDeleteId = element.dataset.id ?? null; historyNotice = ''; renderHistory() }
+      if (action === 'delete-cancel') { pendingDeleteId = null; renderHistory() }
+      if (action === 'delete-confirm') {
+        const targetId = element.dataset.id
+        data.sessions = data.sessions.filter((session) => session.id !== targetId)
+        if (savedDraftSessionId === targetId) savedDraftSessionId = null
+        pendingDeleteId = null
+        historyNotice = '已删除一条训练记录'
+        void saveData(data)
+        renderHistory()
+      }
       if (action === 'back') {
         if (view === 'training' && !confirm('放弃本次未完成训练？')) return
         if (view === 'training') draft = null
