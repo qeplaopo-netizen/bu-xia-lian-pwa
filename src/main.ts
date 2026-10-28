@@ -1,4 +1,13 @@
 import './style.css'
+import {
+  appendTrainingSessionEvidence,
+  migrateAppRecord,
+  type AppRecord,
+  type Certification,
+  type CertificationCore,
+  type LegacyGroup,
+  type LegacySession,
+} from './certification-core'
 
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
   navigator.serviceWorker.register(new URL('sw.js', document.baseURI), { updateViaCache: 'none' }).catch((error) => {
@@ -7,10 +16,9 @@ if ('serviceWorker' in navigator && location.protocol !== 'file:') {
 }
 
 type Kind = 'iptpa' | 'experiment'
-type Group = { name: string; success: number | null; unclear: number; invalid: number; markers: string[] }
-type Session = { id: string; kind: Kind; startedAt: string; completedAt?: string; groups: Group[] }
-type Settings = { name: string; speed: string; interval: string; target: string; notes: string }
-type Data = { settings: Settings; sessions: Session[]; onboardingSeen: boolean }
+type Group = LegacyGroup
+type Session = LegacySession
+type Data = AppRecord
 type Draft = { kind: Kind; startedAt: string; groups: Group[]; undo: Group[][] }
 
 const IPTPA_GROUPS = ['正手直线', '正手斜线', '反手直线', '反手斜线']
@@ -31,9 +39,28 @@ const dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
 async function loadData(): Promise<Data> {
   const db = await dbPromise
   return new Promise((resolve, reject) => {
-    const request = db.transaction('state').objectStore('state').get('app')
-    request.onsuccess = () => resolve({ ...defaultData, ...(request.result ?? {}) })
-    request.onerror = () => reject(request.error)
+    const transaction = db.transaction('state', 'readwrite')
+    const store = transaction.objectStore('state')
+    const request = store.get('app')
+    let migrated: Data | null = null
+    let migrationError: unknown = null
+
+    request.onsuccess = () => {
+      try {
+        const raw = request.result as Partial<Data> | undefined
+        migrated = migrateAppRecord(raw, defaultData)
+        if (!raw?.certificationCore) store.put(migrated, 'app')
+      } catch (error) {
+        migrationError = error
+        transaction.abort()
+      }
+    }
+    request.onerror = () => {
+      migrationError = request.error
+      transaction.abort()
+    }
+    transaction.oncomplete = () => migrated ? resolve(migrated) : reject(new Error('BLOCKED_MIGRATION_RISK: state/app 未能读取'))
+    transaction.onabort = transaction.onerror = () => reject(migrationError ?? transaction.error ?? new Error('BLOCKED_MIGRATION_RISK: IndexedDB 迁移事务失败'))
   })
 }
 
@@ -47,7 +74,14 @@ async function saveData(data: Data): Promise<void> {
 }
 
 const app = document.querySelector<HTMLDivElement>('#app')!
-let data = await loadData()
+let certificationCoreError = ''
+let data: Data
+try {
+  data = await loadData()
+} catch (error) {
+  certificationCoreError = error instanceof Error ? error.message : 'BLOCKED_MIGRATION_RISK: 未知的 IndexedDB 错误'
+  data = { ...defaultData, sessions: [] }
+}
 let draft: Draft | null = null
 let savedDraftSessionId: string | null = null
 let view = 'home'
@@ -88,7 +122,7 @@ function renderHome(): void {
       <p>把注意力留给球场。每组结束记一次，训练结果和技术判断分开。</p>
       <div class="hero-orbit"><div class="orbit-line"></div><div class="court"><i></i><i></i><i></i></div><b>10</b><small>一组球</small></div>
     </section>
-    <section class="quick-row"><button class="text-link" data-action="navigate" data-to="help">☰ 怎么使用</button><span>十球再记 · 不逐球填</span></section>
+    <section class="quick-row"><button class="text-link" data-action="navigate" data-to="help">☰ 怎么使用</button><button class="text-link" data-action="navigate" data-to="certification">PCI L2 · IPTPA L2 认证记录 →</button></section>
     <section class="section-heading"><div><span class="eyebrow">今天的训练</span><h2>从一个目标开始</h2></div><span class="step-mark">01 / 02</span></section>
     <button class="program-card iptpa-card" data-action="start" data-kind="iptpa">
       <span class="card-index">一</span><div class="card-copy"><span class="tag">认证训练</span><h3>IPTPA L2</h3><p>第三拍放小球 · 四个方向 × 10 球</p></div><span class="card-arrow">↗</span><div class="card-bottom"><span>正手直线　正手斜线　反手直线　反手斜线</span><span class="duration">约 10 分钟</span></div>
@@ -158,11 +192,63 @@ function recordScore(score: number): void {
 
 async function finishSession(): Promise<void> {
   if (!draft) return
-  const completed: Session = { id: crypto.randomUUID(), kind: draft.kind, startedAt: draft.startedAt, completedAt: new Date().toISOString(), groups: draft.groups }
+  const baseSession: Session = { id: crypto.randomUUID(), kind: draft.kind, startedAt: draft.startedAt, completedAt: new Date().toISOString(), groups: draft.groups }
+  const { core, session: completed } = appendTrainingSessionEvidence(data.certificationCore!, baseSession)
+  data.certificationCore = core
   data.sessions.push(completed)
   await saveData(data)
   savedDraftSessionId = completed.id
   renderSummary(completed)
+}
+
+function evidenceSummary(core: CertificationCore, requirementIds: string[]): string {
+  const evidence = core.evidence.filter((item) => item.requirement_ids.some((id) => requirementIds.includes(id)))
+  if (!evidence.length) return 'Training Lab 尚未关联证据'
+  const training = evidence.filter((item) => item.evidence_class === 'TRAINING_EVIDENCE').length
+  const official = evidence.filter((item) => item.evidence_class === 'CERTIFICATION_EVIDENCE').length
+  return `Training Evidence ${training} · 官方证据 ${official}（均按来源类别分别保存）`
+}
+
+function certificationRequirementRow(item: CertificationCore['requirements'][number], core: CertificationCore): string {
+  const evidence = evidenceSummary(core, [item.requirement_id])
+  return `<li class="certification-requirement">
+    <div class="certification-requirement-title"><b>${esc(item.requirement_name)}</b><span>认证：${item.certification_status}</span></div>
+    <small>Training Status：${item.training_status} · ${esc(evidence)}</small>
+    <small>Next Action：${esc(item.next_action)}</small>
+    <small>来源状态：${item.source_status}</small>
+  </li>`
+}
+
+function certificationCard(certification: Certification, label: string, core: CertificationCore): string {
+  const requirements = core.requirements.filter((item) => item.certification === certification)
+  const ids = requirements.map((item) => item.requirement_id)
+  const body = requirements.map((item) => certificationRequirementRow(item, core)).join('')
+  const trainingStatus = certification === 'PCI_L2'
+    ? 'UNKNOWN（尚无核实的 PCI 训练映射）'
+    : [...new Set(requirements.filter((item) => item.requirement_type === 'SKILL').map((item) => item.training_status))].join(' / ')
+  return `<section class="certification-card">
+    <div class="certification-card-heading"><div><span class="eyebrow">认证事实</span><h2>${label}</h2></div><strong>Certification Status：UNKNOWN</strong></div>
+    <p class="certification-summary">Training Status：${trainingStatus}</p>
+    <p class="certification-summary">Evidence：${esc(evidenceSummary(core, ids))}</p>
+    <details><summary>查看 ${requirements.length} 条 Requirement</summary><ul class="certification-list">${body}</ul></details>
+    <p class="certification-next"><b>Next Action：</b>${certification === 'PCI_L2'
+      ? '核对个人 PCI 课程账户、Accelerated Pathway 和当前提交状态。'
+      : '核对 IPTPA 会员 / 考次；四方向 Drop 训练记录只作为本地证据。'}</p>
+  </section>`
+}
+
+function renderCertification(): void {
+  const core = data.certificationCore
+  if (!core) {
+    certificationCoreError = 'BLOCKED_MIGRATION_RISK：认证数据层尚未安全初始化；旧训练记录未改动。'
+    shell(`<section class="page-intro compact"><span class="eyebrow">认证数据层</span><h1>暂不可用</h1><p>${esc(certificationCoreError)}</p></section>`)
+    return
+  }
+  shell(`<section class="page-intro compact"><span class="eyebrow">Training Lab · Certification Core</span><h1>认证记录</h1><p>认证事实与训练表现分开保存。本页不显示推算完成百分比。</p></section>
+    ${certificationCoreError ? `<div class="migration-warning">${esc(certificationCoreError)}</div>` : ''}
+    ${certificationCard('PCI_L2', 'PCI L2', core)}
+    ${certificationCard('IPTPA_L2', 'IPTPA L2', core)}
+    <p class="certification-footnote">Training Evidence、成功次数和本地 Session 不代表官方认证 PASS。UNKNOWN 表示尚未由合适的一手证据核实。</p>`)
 }
 
 function renderSummary(session: Draft | Session): void {
@@ -179,7 +265,7 @@ function renderSummary(session: Draft | Session): void {
   const saved = !draft || Boolean(savedDraftSessionId)
   shell(`<section class="summary-hero"><span class="eyebrow">${saved ? '训练完成 · 已保存' : '训练进行中'}</span><h1>${experiment ? '记录一次，<br/>先不下结论。' : '这次训练，<br/>看见了。'}</h1><p>${saved ? dateLabel('completedAt' in session ? session.completedAt! : session.startedAt) : '完成全部组别后自动保存。'}</p></section>
     <section class="results-card"><div class="results-title"><span class="eyebrow">${experiment ? '本次表现记录' : '四组成绩'}</span><span>各组 10 球</span></div>${list}</section>
-    ${experiment ? `<section class="interpretation"><span class="eyebrow">本次训练表现差异</span><div class="compare"><div><small>基线</small><b>${basePct}%</b></div><span>→</span><div><small>变量</small><b>${varPct}%</b></div></div><p>这只是本次训练的表现差异，不能证明拍面时机是原因。下一次做“保持测试”：不加提示，观察表现能否保留。</p></section>` : `<section class="interpretation ${weak.length ? 'needs-work' : ''}"><span class="eyebrow">${weak.length ? '下次多看一眼' : '本次达到 8/10 的组'}</span><p>${weak.length ? `需要继续练习：${weak.map((group) => group.name).join('、')}。` : '四组本次均达到 8/10。一次 8/10 不等于稳定掌握，请在之后的训练持续观察。'}</p><small>单次成绩只是一次观察，不代表已掌握。</small></section>`}
+    ${experiment ? `<section class="interpretation"><span class="eyebrow">本次训练表现差异</span><div class="compare"><div><small>基线</small><b>${basePct}%</b></div><span>→</span><div><small>变量</small><b>${varPct}%</b></div></div><p>这只是本次训练的表现差异，不能证明拍面时机是原因。下一次做“保持测试”：不加提示，观察表现能否保留。</p></section>` : `<section class="interpretation ${weak.length ? 'needs-work' : ''}"><span class="eyebrow">${weak.length ? '下次多看一眼' : '本次达到 8/10 的组'}</span><p>${weak.length ? `需要继续练习：${weak.map((group) => group.name).join('、')}。` : '四组本次均达到 8/10。一次 8/10 不等于稳定掌握，请在之后的训练持续观察。'}</p><small>单次成绩只是一次观察，不代表已掌握。本地训练证据不代表 Director 正式评分或认证 PASS。</small></section>`}
     <div class="summary-actions">${draft && savedDraftSessionId ? `<button class="text-button" data-action="undo-final">↶ 撤销最后一组</button>` : ''}<button class="primary-button" data-action="navigate" data-to="home">回到首页</button><button class="secondary-button" data-action="navigate" data-to="history">查看训练历史</button></div>`)
 }
 
@@ -222,11 +308,16 @@ function renderHistory(): void {
 }
 
 function render(): void {
+  if (certificationCoreError) {
+    app.innerHTML = `<main class="page"><section class="migration-warning"><h1>数据迁移已停止</h1><p>${esc(certificationCoreError)}</p><p>现有训练数据未主动清除或覆盖。请保留此浏览器数据并重试；如问题持续，先导出 / 备份后再处理。</p></section></main>`
+    return
+  }
   if (view === 'home') renderHome()
   else if (view === 'training') renderTraining()
   else if (view === 'help') renderHelp(helpFrom)
   else if (view === 'settings') renderSettings()
   else if (view === 'history') renderHistory()
+  else if (view === 'certification') renderCertification()
 }
 
 function bind(): void {
@@ -240,6 +331,17 @@ function bind(): void {
         const targetId = element.dataset.id
         data.sessions = data.sessions.filter((session) => session.id !== targetId)
         if (savedDraftSessionId === targetId) savedDraftSessionId = null
+        const core = data.certificationCore
+        if (core) {
+          const prefixes = [`session:${targetId}:`, `legacy:${targetId}:`]
+          core.evidence = core.evidence.filter((item) => !prefixes.some((prefix) => item.evidence_id.startsWith(prefix)))
+          for (const requirement of core.requirements) {
+            requirement.evidence_available = requirement.evidence_available.filter((id) => !prefixes.some((prefix) => id.startsWith(prefix)))
+            if (requirement.evidence_available.length === 0 && (requirement.training_status === 'BASELINE_MEASURED' || requirement.training_status === 'TRAINING')) {
+              requirement.training_status = 'UNTESTED'
+            }
+          }
+        }
         pendingDeleteId = null
         historyNotice = '已删除一条训练记录'
         void saveData(data)
@@ -255,6 +357,15 @@ function bind(): void {
       if (action === 'undo' && draft?.undo.length) { draft.groups = draft.undo.pop()!; renderTraining() }
       if (action === 'undo-final' && draft?.undo.length && savedDraftSessionId) {
         data.sessions = data.sessions.filter((session) => session.id !== savedDraftSessionId)
+        const removedPrefix = `session:${savedDraftSessionId}:`
+        const core = data.certificationCore!
+        core.evidence = core.evidence.filter((item) => !item.evidence_id.startsWith(removedPrefix))
+        for (const requirement of core.requirements) {
+          requirement.evidence_available = requirement.evidence_available.filter((id) => !id.startsWith(removedPrefix))
+          if (requirement.evidence_available.length === 0 && requirement.training_status === 'BASELINE_MEASURED') {
+            requirement.training_status = 'UNTESTED'
+          }
+        }
         void saveData(data)
         draft.groups = draft.undo.pop()!
         savedDraftSessionId = null
