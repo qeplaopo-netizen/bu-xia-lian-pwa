@@ -52,7 +52,7 @@ test('adds certification data while preserving an old app record and its session
   assert.ok(migrated.certificationCore.requirements.every((item) => item.certification_status === 'UNKNOWN'))
   assert.ok(migrated.certificationCore.requirements
     .filter((item) => item.certification === 'IPTPA_L2' && item.requirement_type === 'SKILL')
-    .every((item) => item.training_status === 'BASELINE_MEASURED' || item.training_status === 'UNKNOWN'))
+    .every((item) => item.training_status === 'BASELINE_MEASURED' || item.training_status === 'UNTESTED' || item.training_status === 'UNKNOWN'))
   assert.equal(migrated.certificationCore.requirements.find((item) => item.requirement_id === 'IPTPA-L2-SKILL-DROP-FH-STRAIGHT').training_status, 'BASELINE_MEASURED')
   assert.equal(migrated.certificationCore.evidence.length, 4)
   assert.ok(migrated.certificationCore.evidence.every((item) => item.evidence_class === 'TRAINING_EVIDENCE'))

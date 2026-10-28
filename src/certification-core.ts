@@ -95,53 +95,147 @@ export const DROP_GROUP_TO_REQUIREMENT: Record<string, string> = {
   反手斜线: 'IPTPA-L2-SKILL-DROP-BH-CROSS',
 }
 
-const IPTPA_SKILLS: Array<[string, string]> = [
-  ['IPTPA-L2-SKILL-DINK-FH-STRAIGHT', '正手直线丁克'],
-  ['IPTPA-L2-SKILL-DINK-FH-CROSS', '正手斜线丁克'],
-  ['IPTPA-L2-SKILL-DINK-BH-STRAIGHT', '反手直线丁克'],
-  ['IPTPA-L2-SKILL-DINK-BH-CROSS', '反手斜线丁克'],
-  ['IPTPA-L2-SKILL-WINDSHIELD-WIPER-DINKS', 'Windshield-wiper dinks'],
-  ...Object.entries(DROP_GROUP_TO_REQUIREMENT).map(([name, id]) => [id, name] as [string, string]),
-  ['IPTPA-L2-SKILL-VOLLEY-FH-STRAIGHT', '正手直线 Volley'],
-  ['IPTPA-L2-SKILL-VOLLEY-FH-CROSS', '正手斜线 Volley'],
-  ['IPTPA-L2-SKILL-VOLLEY-BH-STRAIGHT', '反手直线 Volley'],
-  ['IPTPA-L2-SKILL-VOLLEY-BH-CROSS', '反手斜线 Volley'],
-  ['IPTPA-L2-SKILL-GROUNDSTROKE-FH-STRAIGHT', '正手直线 Groundstroke'],
-  ['IPTPA-L2-SKILL-GROUNDSTROKE-FH-CROSS', '正手斜线 Groundstroke'],
-  ['IPTPA-L2-SKILL-GROUNDSTROKE-BH-STRAIGHT', '反手直线 Groundstroke'],
-  ['IPTPA-L2-SKILL-GROUNDSTROKE-BH-CROSS', '反手斜线 Groundstroke'],
-  ['IPTPA-L2-SKILL-RETURN-DEUCE', 'Return of Serve · Deuce court'],
-  ['IPTPA-L2-SKILL-RETURN-AD', 'Return of Serve · Ad court'],
-  ['IPTPA-L2-SKILL-SERVE-DEUCE', 'Serve · Deuce court'],
-  ['IPTPA-L2-SKILL-SERVE-AD', 'Serve · Ad court'],
-  ['IPTPA-L2-SKILL-OVERHEADS', 'Overheads'],
-  ['IPTPA-L2-SKILL-OFFENSIVE-LOBS', 'Offensive lobs（forehand & backhand）'],
+export type IptpaSkillDisplay = {
+  requirement_id: string
+  name: string
+  category: string
+  groupKey: string
+}
+
+export const IPTPA_SKILL_CATEGORIES = ['网前小球', '第三拍放小球', '截击', '落地击球', '接发球', '发球', '专项球'] as const
+
+export const IPTPA_SKILL_DISPLAY: IptpaSkillDisplay[] = [
+  { requirement_id: 'IPTPA-L2-SKILL-DINK-FH-STRAIGHT', name: '正手直线网前小球', category: '网前小球', groupKey: '正手直线网前小球' },
+  { requirement_id: 'IPTPA-L2-SKILL-DINK-FH-CROSS', name: '正手斜线网前小球', category: '网前小球', groupKey: '正手斜线网前小球' },
+  { requirement_id: 'IPTPA-L2-SKILL-DINK-BH-STRAIGHT', name: '反手直线网前小球', category: '网前小球', groupKey: '反手直线网前小球' },
+  { requirement_id: 'IPTPA-L2-SKILL-DINK-BH-CROSS', name: '反手斜线网前小球', category: '网前小球', groupKey: '反手斜线网前小球' },
+  { requirement_id: 'IPTPA-L2-SKILL-WINDSHIELD-WIPER-DINKS', name: '横向扫动网前小球（Windshield-wiper）', category: '网前小球', groupKey: '横向扫动网前小球（Windshield-wiper）' },
+  { requirement_id: 'IPTPA-L2-SKILL-DROP-FH-STRAIGHT', name: '正手直线第三拍放小球', category: '第三拍放小球', groupKey: '正手直线' },
+  { requirement_id: 'IPTPA-L2-SKILL-DROP-FH-CROSS', name: '正手斜线第三拍放小球', category: '第三拍放小球', groupKey: '正手斜线' },
+  { requirement_id: 'IPTPA-L2-SKILL-DROP-BH-STRAIGHT', name: '反手直线第三拍放小球', category: '第三拍放小球', groupKey: '反手直线' },
+  { requirement_id: 'IPTPA-L2-SKILL-DROP-BH-CROSS', name: '反手斜线第三拍放小球', category: '第三拍放小球', groupKey: '反手斜线' },
+  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-FH-STRAIGHT', name: '正手直线截击', category: '截击', groupKey: '正手直线截击' },
+  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-FH-CROSS', name: '正手斜线截击', category: '截击', groupKey: '正手斜线截击' },
+  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-BH-STRAIGHT', name: '反手直线截击', category: '截击', groupKey: '反手直线截击' },
+  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-BH-CROSS', name: '反手斜线截击', category: '截击', groupKey: '反手斜线截击' },
+  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-FH-STRAIGHT', name: '正手直线落地击球', category: '落地击球', groupKey: '正手直线落地击球' },
+  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-FH-CROSS', name: '正手斜线落地击球', category: '落地击球', groupKey: '正手斜线落地击球' },
+  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-BH-STRAIGHT', name: '反手直线落地击球', category: '落地击球', groupKey: '反手直线落地击球' },
+  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-BH-CROSS', name: '反手斜线落地击球', category: '落地击球', groupKey: '反手斜线落地击球' },
+  { requirement_id: 'IPTPA-L2-SKILL-RETURN-DEUCE', name: '接发球 · 右区（Deuce）', category: '接发球', groupKey: '接发球 · 右区（Deuce）' },
+  { requirement_id: 'IPTPA-L2-SKILL-RETURN-AD', name: '接发球 · 左区（Ad）', category: '接发球', groupKey: '接发球 · 左区（Ad）' },
+  { requirement_id: 'IPTPA-L2-SKILL-SERVE-DEUCE', name: '发球 · 右区（Deuce）', category: '发球', groupKey: '发球 · 右区（Deuce）' },
+  { requirement_id: 'IPTPA-L2-SKILL-SERVE-AD', name: '发球 · 左区（Ad）', category: '发球', groupKey: '发球 · 左区（Ad）' },
+  { requirement_id: 'IPTPA-L2-SKILL-OVERHEADS', name: '高压球', category: '专项球', groupKey: '高压球' },
+  { requirement_id: 'IPTPA-L2-SKILL-OFFENSIVE-LOBS', name: '进攻挑高球（正手与反手）', category: '专项球', groupKey: '进攻挑高球（正手与反手）' },
 ]
 
+export const GROUP_KEY_TO_REQUIREMENT: Record<string, string> = (() => {
+  const map: Record<string, string> = { ...DROP_GROUP_TO_REQUIREMENT }
+  for (const skill of IPTPA_SKILL_DISPLAY) {
+    if (!(skill.groupKey in map)) map[skill.groupKey] = skill.requirement_id
+  }
+  return map
+})()
+
+export function skillDisplayForRequirement(requirementId: string): IptpaSkillDisplay | undefined {
+  return IPTPA_SKILL_DISPLAY.find((skill) => skill.requirement_id === requirementId)
+}
+
+export function displayTrainingStatus(status: TrainingStatus): string {
+  return {
+    UNKNOWN: '待核实',
+    UNTESTED: '尚未测试',
+    BASELINE_MEASURED: '已建立基线',
+    TRAINING: '训练中',
+    READY_FOR_REVIEW: '待复核',
+    EVIDENCE_CAPTURED: '已留存证据',
+  }[status] ?? '待核实'
+}
+
+export function displayCertificationStatus(status: CertificationStatus): string {
+  return {
+    UNKNOWN: '待核实',
+    NOT_STARTED: '尚未开始',
+    IN_PROGRESS: '进行中',
+    SUBMITTED: '已提交',
+    NEEDS_REVISION: '需修改',
+    PASSED: '官方已通过',
+    FAILED: '未通过',
+    EXEMPTED: '已豁免',
+  }[status] ?? '待核实'
+}
+
+export function displaySourceStatus(status: CertificationRequirement['source_status']): string {
+  return {
+    CONFIRMED_OFFICIAL: '官方已确认',
+    CONFIRMED_PERSONAL: '个人一手信息已确认',
+    MAP_RECORDED_UNVERIFIED: '已记录，待个人核实',
+    UNKNOWN: '待核实',
+  }[status] ?? '待核实'
+}
+
+export function displayEvidenceClass(evidenceClass: EvidenceClass): string {
+  return evidenceClass === 'CERTIFICATION_EVIDENCE' ? '官方证据' : '训练证据'
+}
+
+export function displayEvidenceType(evidenceType: EvidenceType): string {
+  return {
+    SELF_RECORDED: '本人记录',
+    VIDEO: '视频',
+    DIRECTOR_CONFIRMED: 'Director 已确认',
+    OFFICIAL: '官方',
+  }[evidenceType] ?? '本人记录'
+}
+
+export function derivedSkillTrainingStatus(requirement: CertificationRequirement): TrainingStatus {
+  if (requirement.training_status === 'UNKNOWN' && requirement.evidence_available.length === 0
+    && skillDisplayForRequirement(requirement.requirement_id)) {
+    return 'UNTESTED'
+  }
+  return requirement.training_status
+}
+
+export function removeSessionEvidence(core: CertificationCore, sessionId: string): CertificationCore {
+  const prefixes = [`session:${sessionId}:`, `legacy:${sessionId}:`]
+  core.evidence = core.evidence.filter((item) => !prefixes.some((prefix) => item.evidence_id.startsWith(prefix)))
+  for (const requirement of core.requirements) {
+    requirement.evidence_available = requirement.evidence_available.filter((id) => !prefixes.some((prefix) => id.startsWith(prefix)))
+    if (requirement.evidence_available.length === 0
+      && (requirement.training_status === 'BASELINE_MEASURED' || requirement.training_status === 'TRAINING'
+        || requirement.training_status === 'READY_FOR_REVIEW' || requirement.training_status === 'EVIDENCE_CAPTURED')) {
+      requirement.training_status = 'UNTESTED'
+    }
+  }
+  return core
+}
+
+const IPTPA_SKILLS: Array<[string, string]> = IPTPA_SKILL_DISPLAY.map((skill) => [skill.requirement_id, skill.name] as [string, string])
+
 const PCI_REQUIREMENTS: Array<[string, string, CertificationRequirement['requirement_type']]> = [
-  ['PCI-L2-COURSE-PATHWAY', 'Holiis 的 Accelerated Pathway 及获证条件', 'ELIGIBILITY'],
-  ['PCI-L2-COURSE-VERSION', '已购课程版本与公开目录的对应关系', 'COURSE'],
-  ['PCI-L2-ELIGIBILITY-KNOWLEDGE-TEST', 'Accelerated Pathway · L1 Knowledge Test', 'ELIGIBILITY'],
-  ['PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER', 'Accelerated Pathway · L1 evaluation assignments 豁免', 'ELIGIBILITY'],
-  ['PCI-L2-COURSE-LESSONS', 'L2 课程章节与知识检查', 'COURSE'],
-  ['PCI-L2-SUBMISSION-LESSON-PLAN', 'Lesson Plan', 'SUBMISSION'],
-  ['PCI-L2-SUBMISSION-ADJUSTING-DIFFICULTY', 'Adjusting Difficulty', 'SUBMISSION'],
-  ['PCI-L2-SUBMISSION-PPP', 'PPP teaching evaluation', 'SUBMISSION'],
-  ['PCI-L2-SUBMISSION-QKOC', 'QKOC evaluation', 'SUBMISSION'],
-  ['PCI-L2-SUBMISSION-CHARTING', 'Charting', 'SUBMISSION'],
-  ['PCI-L2-SUBMISSION-PLAYING-SKILLS', 'Playing Skills evaluation', 'SUBMISSION'],
-  ['PCI-L2-SUBMISSION-FINAL-PACKAGE', 'Final evaluation package / submission', 'SUBMISSION'],
-  ['PCI-L2-CREDENTIAL-ISSUED', 'PCI L1 + L2 credential issued（Accelerated Pathway）', 'CREDENTIAL'],
+  ['PCI-L2-COURSE-PATHWAY', '我的加速通道及获证条件', 'ELIGIBILITY'],
+  ['PCI-L2-COURSE-VERSION', '已购课程版本', 'COURSE'],
+  ['PCI-L2-ELIGIBILITY-KNOWLEDGE-TEST', '一级知识测试', 'ELIGIBILITY'],
+  ['PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER', '一级评估作业豁免', 'ELIGIBILITY'],
+  ['PCI-L2-COURSE-LESSONS', '二级课程章节与知识检查', 'COURSE'],
+  ['PCI-L2-SUBMISSION-LESSON-PLAN', '课程教案（Lesson Plan）', 'SUBMISSION'],
+  ['PCI-L2-SUBMISSION-ADJUSTING-DIFFICULTY', '难度调整（Adjusting Difficulty）', 'SUBMISSION'],
+  ['PCI-L2-SUBMISSION-PPP', 'PPP 教学评估', 'SUBMISSION'],
+  ['PCI-L2-SUBMISSION-QKOC', 'QKOC 评估', 'SUBMISSION'],
+  ['PCI-L2-SUBMISSION-CHARTING', '比赛记录分析（Charting）', 'SUBMISSION'],
+  ['PCI-L2-SUBMISSION-PLAYING-SKILLS', '球技评估（Playing Skills）', 'SUBMISSION'],
+  ['PCI-L2-SUBMISSION-FINAL-PACKAGE', '最终评估材料 / 提交', 'SUBMISSION'],
+  ['PCI-L2-CREDENTIAL-ISSUED', 'PCI 一级 + 二级证书颁发', 'CREDENTIAL'],
 ]
 
 const IPTPA_OTHER_REQUIREMENTS: Array<[string, string, CertificationRequirement['requirement_type'], CertificationRequirement['source_status']]> = [
-  ['IPTPA-L2-ELIGIBILITY-L1-CREDENTIAL', 'IPTPA Level I 证书', 'ELIGIBILITY', 'MAP_RECORDED_UNVERIFIED'],
-  ['IPTPA-L2-ELIGIBILITY-MEMBERSHIP', '当前会员有效性 / L2 报名资格', 'ELIGIBILITY', 'MAP_RECORDED_UNVERIFIED'],
-  ['IPTPA-L2-SKILL-SEQUENCE-VERSION', '23 项技能测试清单与考次版本', 'SKILL', 'CONFIRMED_OFFICIAL'],
-  ['IPTPA-L2-TEACHING-OBSERVED-LESSON', 'Observed Teaching Lesson', 'TEACHING', 'CONFIRMED_OFFICIAL'],
-  ['IPTPA-L2-ELIGIBILITY-WRITTEN-EXAM', 'Written exam / assessment applicability', 'ELIGIBILITY', 'UNKNOWN'],
-  ['IPTPA-L2-ADMIN-EXAM-BOOKING', '考试预约、费用与实际考次', 'ADMIN', 'MAP_RECORDED_UNVERIFIED'],
-  ['IPTPA-L2-CREDENTIAL-ISSUED', 'IPTPA L2 正式认证授予', 'CREDENTIAL', 'CONFIRMED_OFFICIAL'],
+  ['IPTPA-L2-ELIGIBILITY-L1-CREDENTIAL', '一级证书', 'ELIGIBILITY', 'MAP_RECORDED_UNVERIFIED'],
+  ['IPTPA-L2-ELIGIBILITY-MEMBERSHIP', '会员 / 报名资格', 'ELIGIBILITY', 'MAP_RECORDED_UNVERIFIED'],
+  ['IPTPA-L2-SKILL-SEQUENCE-VERSION', '23 项技能测试', 'SKILL', 'CONFIRMED_OFFICIAL'],
+  ['IPTPA-L2-TEACHING-OBSERVED-LESSON', '1 小时观摩教学课', 'TEACHING', 'CONFIRMED_OFFICIAL'],
+  ['IPTPA-L2-ELIGIBILITY-WRITTEN-EXAM', '书面考试（Written Exam）', 'ELIGIBILITY', 'CONFIRMED_OFFICIAL'],
+  ['IPTPA-L2-ADMIN-EXAM-BOOKING', '考试预约', 'ADMIN', 'MAP_RECORDED_UNVERIFIED'],
+  ['IPTPA-L2-CREDENTIAL-ISSUED', '正式认证授予', 'CREDENTIAL', 'CONFIRMED_OFFICIAL'],
 ]
 
 const DROP_IDS = new Set(Object.values(DROP_GROUP_TO_REQUIREMENT))
@@ -187,7 +281,9 @@ function requirement(
     last_verified_at: 'UNKNOWN',
     next_action: DROP_IDS.has(id) ? '检查本机训练历史；必要时建立本地基线' : nextAction,
     blocking_reason: 'UNKNOWN',
-    notes: ['个人适用性与官方认证状态须由一手证据核实。'],
+    notes: id === 'IPTPA-L2-ELIGIBILITY-WRITTEN-EXAM'
+      ? ['书面考试属于 L2；个人考试状态仍待核实。']
+      : ['个人适用性与官方认证状态须由一手证据核实。'],
   }
 }
 
@@ -201,8 +297,8 @@ function seedRequirements(): CertificationRequirement[] {
     'outputs/PCI_L2_REQUIREMENT_MAP.md',
     'UNKNOWN',
     id === 'PCI-L2-COURSE-PATHWAY'
-      ? '核对个人课程账户、Accelerated Pathway 邮件、期限与提交清单'
-      : '在当前 portal 核对个人适用要求及真实状态',
+      ? '核对个人课程账户、加速通道邮件、期限与提交清单'
+      : '在当前个人账户核对适用要求及真实状态',
   ))
   const iptpaSkills = IPTPA_SKILLS.map(([id, name]) => requirement(
     id,
@@ -211,7 +307,7 @@ function seedRequirements(): CertificationRequirement[] {
     'SKILL',
     'CONFIRMED_OFFICIAL',
     'outputs/IPTPA_L2_REQUIREMENT_MAP.md',
-    DROP_IDS.has(id) ? 'UNKNOWN' : 'UNKNOWN',
+    'UNTESTED',
     DROP_IDS.has(id) ? '检查本机训练历史；必要时建立本地基线' : '个人考次训练映射与判分口径待核',
   ))
   const other = IPTPA_OTHER_REQUIREMENTS.map(([id, name, type, sourceStatus]) => requirement(
@@ -223,8 +319,8 @@ function seedRequirements(): CertificationRequirement[] {
     'outputs/IPTPA_L2_REQUIREMENT_MAP.md',
     'UNKNOWN',
     id === 'IPTPA-L2-ELIGIBILITY-WRITTEN-EXAM'
-      ? '从 portal / Director 确认本次是否适用'
-      : '核对个人 portal / Director 的当前记录',
+      ? '核对个人书面考试状态；个人状态仍待核实'
+      : '核对个人账户 / Director 的当前记录',
   ))
   return [...pci, ...iptpaSkills, ...other]
 }
@@ -327,6 +423,41 @@ export function isValidCertificationCore(value: unknown): value is Certification
     && Array.isArray(core.requirementEvents)
 }
 
+export function refreshCertificationCore(existing: CertificationCore): CertificationCore {
+  const seed = seedRequirements()
+  const byId = new Map(existing.requirements.map((item) => [item.requirement_id, item]))
+  const requirements = seed.map((seedItem) => {
+    const old = byId.get(seedItem.requirement_id)
+    if (!old) return seedItem
+    const merged: CertificationRequirement = {
+      ...seedItem,
+      certification_status: old.certification_status,
+      training_status: old.training_status,
+      evidence_available: [...old.evidence_available],
+      last_verified_at: old.last_verified_at,
+      blocking_reason: old.blocking_reason,
+    }
+    if (skillDisplayForRequirement(merged.requirement_id)
+      && merged.training_status === 'UNKNOWN' && merged.evidence_available.length === 0) {
+      merged.training_status = 'UNTESTED'
+    }
+    return merged
+  })
+  for (const old of existing.requirements) {
+    if (!requirements.some((item) => item.requirement_id === old.requirement_id)) requirements.push(old)
+  }
+  const refreshed: CertificationCore = {
+    schema_version: '0.1',
+    requirements,
+    evidence: [...existing.evidence],
+    requirementEvents: [...existing.requirementEvents],
+  }
+  if (!isValidCertificationCore(refreshed)) {
+    throw new Error('BLOCKED_MIGRATION_RISK: 刷新后的 certificationCore 格式无法识别，未写入数据')
+  }
+  return refreshed
+}
+
 export function migrateAppRecord(raw: unknown, defaults: Omit<AppRecord, 'certificationCore'>): AppRecord {
   if (raw !== undefined && raw !== null && (typeof raw !== 'object' || Array.isArray(raw))) {
     throw new Error('BLOCKED_MIGRATION_RISK: state/app 不是可安全扩展的对象')
@@ -341,6 +472,8 @@ export function migrateAppRecord(raw: unknown, defaults: Omit<AppRecord, 'certif
   const record = { ...defaults, ...original } as AppRecord
   if (!record.certificationCore) {
     record.certificationCore = createCertificationCore(record.sessions)
+  } else {
+    record.certificationCore = refreshCertificationCore(record.certificationCore)
   }
   return record
 }
@@ -360,7 +493,7 @@ export function appendTrainingSessionEvidence(
 
   const requirements = new Map(nextCore.requirements.map((item) => [item.requirement_id, item]))
   for (const group of session.groups) {
-    const requirementId = DROP_GROUP_TO_REQUIREMENT[group.name]
+    const requirementId = GROUP_KEY_TO_REQUIREMENT[group.name]
     const item = requirementId ? requirements.get(requirementId) : undefined
     if (!item || !isUsableGroup(group)) continue
     const evidenceId = `session:${session.id}:${requirementId}`

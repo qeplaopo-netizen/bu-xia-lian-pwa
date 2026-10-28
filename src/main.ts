@@ -1,10 +1,16 @@
 import './style.css'
 import {
   appendTrainingSessionEvidence,
+  derivedSkillTrainingStatus,
+  displayCertificationStatus,
+  displayTrainingStatus,
+  GROUP_KEY_TO_REQUIREMENT,
+  IPTPA_SKILL_CATEGORIES,
+  IPTPA_SKILL_DISPLAY,
   migrateAppRecord,
+  removeSessionEvidence,
+  skillDisplayForRequirement,
   type AppRecord,
-  type Certification,
-  type CertificationCore,
   type LegacyGroup,
   type LegacySession,
 } from './certification-core'
@@ -19,10 +25,152 @@ type Kind = 'iptpa' | 'experiment'
 type Group = LegacyGroup
 type Session = LegacySession
 type Data = AppRecord
-type Draft = { kind: Kind; startedAt: string; groups: Group[]; undo: Group[][] }
+type Draft = {
+  kind: Kind
+  startedAt: string
+  groups: Group[]
+  undo: Group[][]
+  isSkillTraining?: boolean
+  skillRequirementId?: string
+  skillDisplayName?: string
+  skillCategory?: string
+}
 
-const IPTPA_GROUPS = ['正手直线', '正手斜线', '反手直线', '反手斜线']
 const EXP_GROUPS = ['基线1', '基线2', '变量1', '变量2', '变量3']
+
+type PciTaskInfo = {
+  course: string
+  summary: string
+  template?: string
+  complete: string
+  evidence: string
+  next: string
+}
+
+const PCI_TASK_INFO: Record<string, PciTaskInfo> = {
+  'PCI-L2-COURSE-PATHWAY': {
+    course: '资格与课程 · 不在 13 个模块课目内',
+    summary: '加速通道的获证条件与个人适用性。',
+    complete: '核对个人课程账户与加速通道邮件。',
+    evidence: '个人账户一手信息（不在本机课程包内）。',
+    next: '先核对课程账户。',
+  },
+  'PCI-L2-COURSE-VERSION': {
+    course: '资格与课程 · 课程包 rev 006-fix1 可作版本对照参考',
+    summary: '已购课程版本与公开目录的对应关系。',
+    complete: '核对个人已购版本。',
+    evidence: '个人账户信息。',
+    next: '先核对课程账户。',
+  },
+  'PCI-L2-ELIGIBILITY-KNOWLEDGE-TEST': {
+    course: '资格与课程 · 一级考核，不在二级课目内',
+    summary: '一级知识测试。',
+    complete: '在个人账户核对是否已完成。',
+    evidence: '个人账户信息。',
+    next: '先核对课程账户。',
+  },
+  'PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER': {
+    course: '资格与课程 · 一级评估作业豁免',
+    summary: '一级评估作业豁免的个人适用性。',
+    complete: '核对个人账户豁免状态。',
+    evidence: '个人账户信息。',
+    next: '先核对课程账户。',
+  },
+  'PCI-L2-COURSE-LESSONS': {
+    course: '课程 · m01–m12',
+    summary: '二级课程章节与知识检查，按模块学习并在个人账户完成章节测验。',
+    complete: '学完 m01–m12，并在个人账户完成章节测验。',
+    evidence: '个人账户测验记录（本页不代答）。',
+    next: '按模块学习，测验在个人账户完成。',
+  },
+  'PCI-L2-SUBMISSION-LESSON-PLAN': {
+    course: '作业 · m13-a01 + m12-l04 示例',
+    summary: '设计一份 60–90 分钟教案。',
+    template: 'm13-a01-lesson-planning-template.pdf（本地引用，不打包进应用）',
+    complete: '按模板起草教案，转 PDF 后留待最终评估提交。',
+    evidence: '起草的教案 PDF（本地准备，不在本页提交）。',
+    next: '按模板起草，不提交。',
+  },
+  'PCI-L2-SUBMISSION-ADJUSTING-DIFFICULTY': {
+    course: '作业 · m13-a02 + m04',
+    summary: '调整训练活动难度。',
+    template: 'm13-a02-adjusting-difficulty-template.docx（本地引用，不打包进应用）',
+    complete: '选 5 个活动，每个写 3 种增加难度、3 种降低难度的方法。',
+    evidence: '填写后的模板（本地准备，期末统一提交）。',
+    next: '按模板准备，不提交。',
+  },
+  'PCI-L2-SUBMISSION-PPP': {
+    course: '作业 · m13-a03 + m05',
+    summary: '在教案中应用 Play-Practice-Play。',
+    template: 'm13-a03-play-practice-play-template.pdf（本地引用，不打包进应用）',
+    complete: '设计 3 个连续环节（各 15–25 分钟）：Play → Practice → Play。',
+    evidence: '设计的教案（本地准备，期末统一提交）。',
+    next: '按模板设计，不提交。',
+  },
+  'PCI-L2-SUBMISSION-QKOC': {
+    course: '作业 · m13-a04 + m08',
+    summary: '带练 Queen and King of the Court（标准版 + 一个修改版）。',
+    template: '无文档附件；课程视频 m08-v01 / m08-v02（本地引用，不打包进应用）',
+    complete: '演示并带练标准版 + 一个修改版，提供积极鼓励与清晰带练领导力。',
+    evidence: '练习视频链接（考核视频按约定不由本页代录、不上传）。',
+    next: '先学 m08，再自行练习。',
+  },
+  'PCI-L2-SUBMISSION-CHARTING': {
+    course: '作业 · m13-l02 + m06',
+    summary: '比赛记录分析：记录发球落点、接发深度、第三拍决策。',
+    template: 'm13-l02-charting-template.docx / .pdf（本地引用，不打包进应用）',
+    complete: '用模板做一次比赛分析，保存到自己设备。',
+    evidence: '完成的分析文件（本地准备，作为评估材料包一部分在最终评估提交）。',
+    next: '用模板做一次练习。',
+  },
+  'PCI-L2-SUBMISSION-PLAYING-SKILLS': {
+    course: '作业 · m13-a05 + m10',
+    summary: '打球技能评估：正反手底线球、截击、发球，精度需达到能向学员示范的标准。',
+    template: '无文档附件；页内嵌示例视频已归档（本地引用，不打包进应用）',
+    complete: '自行练习并录制练习视频（考核视频按约定不代录）。',
+    evidence: '练习视频链接（最终评估提交时使用）。',
+    next: '按 m10 技术基础练习；通过线未量化，不自行设定。',
+  },
+  'PCI-L2-SUBMISSION-FINAL-PACKAGE': {
+    course: '最终完成 · m02-l03 + m13',
+    summary: '最终评估材料 / 提交。',
+    complete: '学完所有章节和课目后，按最终评估清单统一提交。',
+    evidence: '全部作业材料包。',
+    next: '学完课程后再核对提交清单。',
+  },
+  'PCI-L2-CREDENTIAL-ISSUED': {
+    course: '最终完成 · 官方结果',
+    summary: 'PCI 一级 + 二级证书颁发。',
+    complete: '等待官方评估与颁发。',
+    evidence: '官方颁发记录。',
+    next: '等官方结果，不由本页判定。',
+  },
+}
+
+const PCI_TASK_GROUPS: Array<{ title: string; ids: string[] }> = [
+  {
+    title: '资格与课程',
+    ids: ['PCI-L2-COURSE-PATHWAY', 'PCI-L2-COURSE-VERSION', 'PCI-L2-ELIGIBILITY-KNOWLEDGE-TEST', 'PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER', 'PCI-L2-COURSE-LESSONS'],
+  },
+  {
+    title: '作业与评估',
+    ids: ['PCI-L2-SUBMISSION-LESSON-PLAN', 'PCI-L2-SUBMISSION-ADJUSTING-DIFFICULTY', 'PCI-L2-SUBMISSION-PPP', 'PCI-L2-SUBMISSION-QKOC', 'PCI-L2-SUBMISSION-CHARTING', 'PCI-L2-SUBMISSION-PLAYING-SKILLS'],
+  },
+  {
+    title: '最终完成',
+    ids: ['PCI-L2-SUBMISSION-FINAL-PACKAGE', 'PCI-L2-CREDENTIAL-ISSUED'],
+  },
+]
+
+const IPTPA_ADMIN_IDS = [
+  'IPTPA-L2-ELIGIBILITY-L1-CREDENTIAL',
+  'IPTPA-L2-ELIGIBILITY-MEMBERSHIP',
+  'IPTPA-L2-SKILL-SEQUENCE-VERSION',
+  'IPTPA-L2-ELIGIBILITY-WRITTEN-EXAM',
+  'IPTPA-L2-TEACHING-OBSERVED-LESSON',
+  'IPTPA-L2-ADMIN-EXAM-BOOKING',
+  'IPTPA-L2-CREDENTIAL-ISSUED',
+]
 const defaultData: Data = {
   settings: { name: '斯波阿斯', speed: '', interval: '', target: '', notes: '' },
   sessions: [],
@@ -49,7 +197,7 @@ async function loadData(): Promise<Data> {
       try {
         const raw = request.result as Partial<Data> | undefined
         migrated = migrateAppRecord(raw, defaultData)
-        if (!raw?.certificationCore) store.put(migrated, 'app')
+        store.put(migrated, 'app')
       } catch (error) {
         migrationError = error
         transaction.abort()
@@ -99,6 +247,41 @@ function dateLabel(value: string): string {
   return new Intl.DateTimeFormat('zh-CN', { month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' }).format(new Date(value))
 }
 
+function iptpaSkillCounts(): { untested: number; baseline: number; training: number } {
+  const core = data.certificationCore
+  const counts = { untested: 0, baseline: 0, training: 0 }
+  if (!core) return counts
+  const byId = new Map(core.requirements.map((item) => [item.requirement_id, item]))
+  for (const skill of IPTPA_SKILL_DISPLAY) {
+    const requirement = byId.get(skill.requirement_id)
+    if (!requirement) continue
+    const status = derivedSkillTrainingStatus(requirement)
+    if (status === 'UNTESTED') counts.untested += 1
+    else if (status === 'BASELINE_MEASURED') counts.baseline += 1
+    else if (status === 'TRAINING') counts.training += 1
+  }
+  return counts
+}
+
+function recentScoreForSkill(requirementId: string): number | null {
+  const sessions = data.sessions.slice().sort((a, b) => (b.completedAt ?? b.startedAt).localeCompare(a.completedAt ?? a.startedAt))
+  for (const session of sessions) {
+    if (session.kind !== 'iptpa') continue
+    for (const group of session.groups) {
+      if (GROUP_KEY_TO_REQUIREMENT[group.name] === requirementId && group.success !== null) return group.success
+    }
+  }
+  return null
+}
+
+function overallCertificationText(certification: 'PCI_L2' | 'IPTPA_L2'): string {
+  const core = data.certificationCore
+  if (!core) return '待核实'
+  const statuses = [...new Set(core.requirements.filter((item) => item.certification === certification).map((item) => item.certification_status))]
+  if (statuses.length === 1) return displayCertificationStatus(statuses[0])
+  return statuses.map((status) => displayCertificationStatus(status)).join('、')
+}
+
 function setView(next: string): void {
   view = next
   render()
@@ -116,19 +299,24 @@ function shell(content: string, back = 'home'): void {
 
 function renderHome(): void {
   const recent = data.sessions.slice().sort((a, b) => (b.completedAt ?? b.startedAt).localeCompare(a.completedAt ?? a.startedAt)).slice(0, 3)
+  const counts = iptpaSkillCounts()
   shell(`<section class="hero">
       <div class="eyebrow">匹克球训练实验室 <span>简体中文版</span></div>
       <h1>练完十球，<br><em>再碰手机。</em></h1>
       <p>把注意力留给球场。每组结束记一次，训练结果和技术判断分开。</p>
       <div class="hero-orbit"><div class="orbit-line"></div><div class="court"><i></i><i></i><i></i></div><b>10</b><small>一组球</small></div>
     </section>
-    <section class="quick-row"><button class="text-link" data-action="navigate" data-to="help">☰ 怎么使用</button><button class="text-link" data-action="navigate" data-to="certification">PCI L2 · IPTPA L2 认证记录 →</button></section>
-    <section class="section-heading"><div><span class="eyebrow">今天的训练</span><h2>从一个目标开始</h2></div><span class="step-mark">01 / 02</span></section>
-    <button class="program-card iptpa-card" data-action="start" data-kind="iptpa">
-      <span class="card-index">一</span><div class="card-copy"><span class="tag">认证训练</span><h3>IPTPA L2</h3><p>第三拍放小球 · 四个方向 × 10 球</p></div><span class="card-arrow">↗</span><div class="card-bottom"><span>正手直线　正手斜线　反手直线　反手斜线</span><span class="duration">约 10 分钟</span></div>
+    <section class="quick-row"><button class="text-link" data-action="navigate" data-to="help">☰ 怎么使用</button><button class="text-link" data-action="navigate" data-to="history">训练历史 →</button></section>
+    <section class="section-heading"><div><span class="eyebrow">今天推进认证</span><h2>先做认证真正需要的那一步</h2></div></section>
+    <button class="program-card iptpa-card" data-action="navigate" data-to="iptpa-skills">
+      <span class="card-index">一</span><div class="card-copy"><span class="tag">认证训练</span><h3>IPTPA L2</h3><p>23 项技能训练</p></div><span class="card-arrow">↗</span><div class="card-bottom"><span>尚未测试 ${counts.untested} · 已建立基线 ${counts.baseline} · 训练中 ${counts.training}</span><span class="duration">训练状态统计，不是认证完成度</span></div>
     </button>
+    <button class="program-card" data-action="navigate" data-to="pci-tasks">
+      <span class="card-index">二</span><div class="card-copy"><span class="tag">认证任务</span><h3>PCI L2</h3><p>课程 / 作业 / 评估任务</p></div><span class="card-arrow">↗</span><div class="card-bottom"><span>先核对课程账户</span><span class="duration">个人状态未知，不编造完成状态</span></div>
+    </button>
+    <section class="section-heading small"><div><span class="eyebrow">其他训练</span><h2>认证主线之外</h2></div></section>
     <button class="program-card experiment-card" data-action="start" data-kind="experiment">
-      <span class="card-index">二</span><div class="card-copy"><span class="tag">个人技术实验</span><h3>重置球容易飞高</h3><p>基线 2 组 × 变量 3 组</p></div><span class="card-arrow">↗</span><div class="card-bottom"><span>本轮唯一变量：拍面呈现时机</span><span class="duration">约 15 分钟</span></div>
+      <span class="card-index">三</span><div class="card-copy"><span class="tag">个人技术实验</span><h3>重置球容易飞高</h3><p>基线 2 组 × 变量 3 组</p></div><span class="card-arrow">↗</span><div class="card-bottom"><span>本轮唯一变量：拍面呈现时机</span><span class="duration">约 15 分钟</span></div>
     </button>
     <section class="utility-grid"><button class="utility-card" data-action="navigate" data-to="settings"><span class="utility-icon">⌁</span><span><b>发球机设置</b><small>${esc(data.settings.name || '尚未设置')}</small></span><span class="chevron">›</span></button><button class="utility-card" data-action="navigate" data-to="history"><span class="utility-icon">▤</span><span><b>训练历史</b><small>${data.sessions.length ? `已保存 ${data.sessions.length} 次训练` : '完成训练后在这里查看'}</small></span><span class="chevron">›</span></button></section>
     ${recent.length ? `<section class="recent-section"><div class="section-heading small"><div><span class="eyebrow">最近一次</span><h2>训练回看</h2></div><button class="text-link" data-action="navigate" data-to="history">全部记录 →</button></div><div class="recent-card"><b>${recent[0].kind === 'iptpa' ? 'IPTPA L2' : '重置球实验'}</b><span>${dateLabel(recent[0].completedAt ?? recent[0].startedAt)}</span><p>${summaryFor(recent[0])}</p></div></section>` : ''}
@@ -137,6 +325,12 @@ function renderHome(): void {
 
 function summaryFor(session: Session): string {
   if (session.kind === 'iptpa') {
+    if (session.groups.length === 1) {
+      const group = session.groups[0]
+      return (group.success ?? 0) >= 8
+        ? '本次达到 8/10；继续在后续训练观察稳定性。本地成绩不代表认证通过。'
+        : `需要继续观察：${group.name}`
+    }
     const weak = session.groups.filter((group) => (group.success ?? 0) < 8).map((group) => group.name)
     return weak.length ? `需要继续观察：${weak.join('、')}` : '本次四组均达到 8/10；继续在后续训练观察稳定性。'
   }
@@ -151,10 +345,59 @@ function summaryFor(session: Session): string {
 }
 
 function start(kind: Kind): void {
-  const names = kind === 'iptpa' ? IPTPA_GROUPS : EXP_GROUPS
+  if (kind === 'iptpa') {
+    setView('iptpa-skills')
+    return
+  }
   savedDraftSessionId = null
-  draft = { kind, startedAt: new Date().toISOString(), groups: names.map((name) => ({ name, success: null, unclear: 0, invalid: 0, markers: [] })), undo: [] }
+  draft = { kind, startedAt: new Date().toISOString(), groups: EXP_GROUPS.map((name) => ({ name, success: null, unclear: 0, invalid: 0, markers: [] })), undo: [] }
   setView('training')
+}
+
+function startSkill(requirementId: string): void {
+  const skill = skillDisplayForRequirement(requirementId)
+  if (!skill) return
+  savedDraftSessionId = null
+  draft = {
+    kind: 'iptpa',
+    startedAt: new Date().toISOString(),
+    groups: [{ name: skill.groupKey, success: null, unclear: 0, invalid: 0, markers: [] }],
+    undo: [],
+    isSkillTraining: true,
+    skillRequirementId: skill.requirement_id,
+    skillDisplayName: skill.name,
+    skillCategory: skill.category,
+  }
+  setView('skill-training')
+}
+
+function renderSkillTraining(): void {
+  if (!draft || !draft.isSkillTraining) return renderHome()
+  const group = draft.groups[0]
+  const skillCategory = draft.skillCategory ?? ''
+  const skillDisplayName = draft.skillDisplayName ?? group.name
+  const skillRequirementId = draft.skillRequirementId
+  const core = data.certificationCore
+  const requirement = core?.requirements.find((item) => item.requirement_id === skillRequirementId)
+  const currentStatus = requirement ? displayTrainingStatus(derivedSkillTrainingStatus(requirement)) : '待核实'
+  const numbers = Array.from({ length: 11 }, (_, n) => `<button class="score-button" data-action="score" data-score="${n}">${n}</button>`).join('')
+  shell(`<section class="training-top"><span>IPTPA L2 · ${esc(skillCategory)}</span></section>
+    <section class="training-focus"><span class="eyebrow">通用 10 球训练器</span><h1>${esc(skillDisplayName)}</h1><div class="ball-count"><b>10</b><span>球</span><p>现在把手机放一边<br/>打完这一组再回来</p></div></section>
+    <p class="certification-summary">当前训练状态：${currentStatus}</p>
+    <p class="certification-summary">怎么练：按当前训练条件完成 10 球，记录成功数。官方未给出具体喂球参数，本页不编造发球机位置、速度、频率、旋转、站位与目标区尺寸。</p>
+    <div class="record-panel"><div class="record-heading"><b>这一组打进目标区几球？</b><span>完成 10 球后选一次</span></div><div class="score-grid">${numbers}</div><div class="score-caption"><span>0 球</span><span>10 球</span><span>10 球</span></div></div>
+    <div class="training-actions"><button class="text-button" data-action="cancel">结束本次训练</button></div>`, 'iptpa-skills')
+}
+
+function renderSkillSummary(session: Session): void {
+  const group = session.groups[0]
+  const success = group.success ?? 0
+  const reached = success >= 8
+  const saved = Boolean(savedDraftSessionId)
+  shell(`<section class="summary-hero"><span class="eyebrow">${saved ? '训练完成 · 已保存' : '训练进行中'}</span><h1>${esc(draft?.skillDisplayName ?? group.name)}</h1><p>${saved ? dateLabel(session.completedAt ?? session.startedAt) : '完成全部组别后自动保存。'}</p></section>
+    <section class="results-card"><div class="results-title"><span class="eyebrow">本次 10 球</span><span>${esc(draft?.skillCategory ?? '')}</span></div><div class="result-row"><div><b>${esc(draft?.skillDisplayName ?? group.name)}</b><small>10 球</small></div><strong>${success}<small>/10</small></strong><div class="result-meter"><i style="width:${success * 10}%"></i></div></div></section>
+    <section class="interpretation ${reached ? '' : 'needs-work'}"><span class="eyebrow">${reached ? '本次数量' : '继续训练'}</span><p>${reached ? '本次数量达到官方数量门槛。' : '本次数量未达到 8/10，继续训练。'}</p><small>正式技能通过仍需要 Director 判断动作基本功；本地成绩不代表认证 PASS。</small></section>
+    <div class="summary-actions">${draft && savedDraftSessionId ? `<button class="text-button" data-action="undo-final">↶ 撤销最后一组</button>` : ''}<button class="primary-button" data-action="navigate" data-to="home">回到首页</button><button class="secondary-button" data-action="navigate" data-to="iptpa-skills">查看 IPTPA 技能</button><button class="secondary-button" data-action="navigate" data-to="history">查看训练历史</button></div>`, 'iptpa-skills')
 }
 
 function renderTraining(): void {
@@ -198,57 +441,71 @@ async function finishSession(): Promise<void> {
   data.sessions.push(completed)
   await saveData(data)
   savedDraftSessionId = completed.id
-  renderSummary(completed)
+  if (draft.isSkillTraining) renderSkillSummary(completed)
+  else renderSummary(completed)
 }
 
-function evidenceSummary(core: CertificationCore, requirementIds: string[]): string {
-  const evidence = core.evidence.filter((item) => item.requirement_ids.some((id) => requirementIds.includes(id)))
-  if (!evidence.length) return 'Training Lab 尚未关联证据'
-  const training = evidence.filter((item) => item.evidence_class === 'TRAINING_EVIDENCE').length
-  const official = evidence.filter((item) => item.evidence_class === 'CERTIFICATION_EVIDENCE').length
-  return `Training Evidence ${training} · 官方证据 ${official}（均按来源类别分别保存）`
-}
-
-function certificationRequirementRow(item: CertificationCore['requirements'][number], core: CertificationCore): string {
-  const evidence = evidenceSummary(core, [item.requirement_id])
-  return `<li class="certification-requirement">
-    <div class="certification-requirement-title"><b>${esc(item.requirement_name)}</b><span>认证：${item.certification_status}</span></div>
-    <small>Training Status：${item.training_status} · ${esc(evidence)}</small>
-    <small>Next Action：${esc(item.next_action)}</small>
-    <small>来源状态：${item.source_status}</small>
-  </li>`
-}
-
-function certificationCard(certification: Certification, label: string, core: CertificationCore): string {
-  const requirements = core.requirements.filter((item) => item.certification === certification)
-  const ids = requirements.map((item) => item.requirement_id)
-  const body = requirements.map((item) => certificationRequirementRow(item, core)).join('')
-  const trainingStatus = certification === 'PCI_L2'
-    ? 'UNKNOWN（尚无核实的 PCI 训练映射）'
-    : [...new Set(requirements.filter((item) => item.requirement_type === 'SKILL').map((item) => item.training_status))].join(' / ')
-  return `<section class="certification-card">
-    <div class="certification-card-heading"><div><span class="eyebrow">认证事实</span><h2>${label}</h2></div><strong>Certification Status：UNKNOWN</strong></div>
-    <p class="certification-summary">Training Status：${trainingStatus}</p>
-    <p class="certification-summary">Evidence：${esc(evidenceSummary(core, ids))}</p>
-    <details><summary>查看 ${requirements.length} 条 Requirement</summary><ul class="certification-list">${body}</ul></details>
-    <p class="certification-next"><b>Next Action：</b>${certification === 'PCI_L2'
-      ? '核对个人 PCI 课程账户、Accelerated Pathway 和当前提交状态。'
-      : '核对 IPTPA 会员 / 考次；四方向 Drop 训练记录只作为本地证据。'}</p>
-  </section>`
-}
-
-function renderCertification(): void {
+function renderIptpaSkills(): void {
   const core = data.certificationCore
   if (!core) {
     certificationCoreError = 'BLOCKED_MIGRATION_RISK：认证数据层尚未安全初始化；旧训练记录未改动。'
     shell(`<section class="page-intro compact"><span class="eyebrow">认证数据层</span><h1>暂不可用</h1><p>${esc(certificationCoreError)}</p></section>`)
     return
   }
-  shell(`<section class="page-intro compact"><span class="eyebrow">Training Lab · Certification Core</span><h1>认证记录</h1><p>认证事实与训练表现分开保存。本页不显示推算完成百分比。</p></section>
-    ${certificationCoreError ? `<div class="migration-warning">${esc(certificationCoreError)}</div>` : ''}
-    ${certificationCard('PCI_L2', 'PCI L2', core)}
-    ${certificationCard('IPTPA_L2', 'IPTPA L2', core)}
-    <p class="certification-footnote">Training Evidence、成功次数和本地 Session 不代表官方认证 PASS。UNKNOWN 表示尚未由合适的一手证据核实。</p>`)
+  const counts = iptpaSkillCounts()
+  const byId = new Map(core.requirements.map((item) => [item.requirement_id, item]))
+  const categories = IPTPA_SKILL_CATEGORIES.map((category) => {
+    const rows = IPTPA_SKILL_DISPLAY.filter((skill) => skill.category === category).map((skill) => {
+      const requirement = byId.get(skill.requirement_id)
+      const status = requirement ? displayTrainingStatus(derivedSkillTrainingStatus(requirement)) : '待核实'
+      const recent = recentScoreForSkill(skill.requirement_id)
+      const hasEvidence = Boolean(requirement && requirement.evidence_available.length)
+      return `<li class="certification-requirement">
+        <div class="certification-requirement-title"><b>${esc(skill.name)}</b><span>训练状态：${status}</span></div>
+        <small>${recent !== null ? `最近一次：${recent}/10` : '暂无本地训练记录'}</small>
+        <button class="secondary-button skill-start-button" data-action="skill-start" data-requirement-id="${esc(skill.requirement_id)}">${hasEvidence ? '继续训练' : '开始训练'}</button>
+      </li>`
+    }).join('')
+    return `<section class="certification-card"><div class="certification-card-heading"><div><span class="eyebrow">技能类别</span><h2>${category}</h2></div></div><ul class="certification-list">${rows}</ul></section>`
+  }).join('')
+  const adminRows = IPTPA_ADMIN_IDS.map((id) => {
+    const item = byId.get(id)
+    if (!item) return ''
+    return `<li class="certification-requirement">
+      <div class="certification-requirement-title"><b>${esc(item.requirement_name)}</b><span>认证状态：${displayCertificationStatus(item.certification_status)}</span></div>
+      <small>下一步：${esc(item.next_action)}</small>
+    </li>`
+  }).join('')
+  shell(`<section class="page-intro compact"><span class="eyebrow">认证训练</span><h1>IPTPA L2</h1><p>认证状态：${overallCertificationText('IPTPA_L2')}</p><p>本地训练记录 10 球成绩，但 8/10 不代表认证通过，正式通过还要求 Director 判断动作基本功。</p><p>本页不显示认证完成百分比。</p></section>
+    <section class="certification-card"><div class="certification-card-heading"><div><span class="eyebrow">训练概览</span><h2>23 项技能</h2></div></div><p class="certification-summary">尚未测试 ${counts.untested} · 已建立基线 ${counts.baseline} · 训练中 ${counts.training}</p><p class="certification-summary">这是训练状态统计，不是认证完成度。怎么练：选择技能 → 完成当前训练条件下的 10 球 → 记录成功数。官方未给出具体喂球参数，本页不编造。</p></section>
+    ${categories}
+    <section class="certification-card"><details><summary>考试与认证要求</summary><ul class="certification-list">${adminRows}</ul></details><p class="certification-footnote">训练证据、成功次数和本地训练记录不代表官方认证通过。待核实表示尚未由合适的一手证据核实。</p></section>`)
+}
+
+function renderPciTasks(): void {
+  const core = data.certificationCore
+  if (!core) {
+    certificationCoreError = 'BLOCKED_MIGRATION_RISK：认证数据层尚未安全初始化；旧训练记录未改动。'
+    shell(`<section class="page-intro compact"><span class="eyebrow">认证数据层</span><h1>暂不可用</h1><p>${esc(certificationCoreError)}</p></section>`)
+    return
+  }
+  const byId = new Map(core.requirements.map((item) => [item.requirement_id, item]))
+  const groups = PCI_TASK_GROUPS.map((group) => {
+    const cards = group.ids.map((id) => {
+      const item = byId.get(id)
+      const info = PCI_TASK_INFO[id]
+      if (!item || !info) return ''
+      return `<section class="certification-card"><div class="certification-card-heading"><div><span class="eyebrow">${esc(info.course)}</span><h2>${esc(item.requirement_name)}</h2></div><strong>认证状态：${displayCertificationStatus(item.certification_status)}</strong></div>
+        <p class="certification-summary">学什么：${esc(info.summary)}</p>
+        ${info.template ? `<p class="certification-summary">已有模板：${esc(info.template)}</p>` : ''}
+        <p class="certification-summary">要完成什么：${esc(info.complete)}</p>
+        <p class="certification-summary">要保存什么证据：${esc(info.evidence)}</p>
+        <p class="certification-next"><b>下一步：</b>${esc(info.next)}</p></section>`
+    }).join('')
+    return `<section class="section-heading small"><div><span class="eyebrow">任务分组</span><h2>${group.title}</h2></div></section>${cards}`
+  }).join('')
+  shell(`<section class="page-intro compact"><span class="eyebrow">认证任务</span><h1>PCI L2</h1><p>认证状态：${overallCertificationText('PCI_L2')}</p><p>课程 → 学习 → 作业 / 评估 → 证据 → 下一步。本页只保留课程 / 模块 ID、中文任务名、简短摘要、本地资产引用、任务状态与证据状态，不打包原始视频、完整字幕与 PDF。</p><p>课程包内 3 条考核规则尚未与官方公开规则交叉核对，本页不将其显示为官方已确认；个人状态仍待核实。技术基础示例视频 Volley Sensation 在课程包内记 missing，不影响本页任务系统。</p><p>本页不显示认证完成百分比。</p></section>
+    ${groups}`)
 }
 
 function renderSummary(session: Draft | Session): void {
@@ -264,7 +521,7 @@ function renderSummary(session: Draft | Session): void {
   const varPct = experiment ? Math.round(groups.slice(2).reduce((sum, group) => sum + (group.success ?? 0), 0) / Math.max(1, groups.slice(2).reduce((sum, group) => sum + 10 - group.unclear - group.invalid, 0)) * 100) : 0
   const saved = !draft || Boolean(savedDraftSessionId)
   shell(`<section class="summary-hero"><span class="eyebrow">${saved ? '训练完成 · 已保存' : '训练进行中'}</span><h1>${experiment ? '记录一次，<br/>先不下结论。' : '这次训练，<br/>看见了。'}</h1><p>${saved ? dateLabel('completedAt' in session ? session.completedAt! : session.startedAt) : '完成全部组别后自动保存。'}</p></section>
-    <section class="results-card"><div class="results-title"><span class="eyebrow">${experiment ? '本次表现记录' : '四组成绩'}</span><span>各组 10 球</span></div>${list}</section>
+    <section class="results-card"><div class="results-title"><span class="eyebrow">${experiment ? '本次表现记录' : '各组成绩'}</span><span>各组 10 球</span></div>${list}</section>
     ${experiment ? `<section class="interpretation"><span class="eyebrow">本次训练表现差异</span><div class="compare"><div><small>基线</small><b>${basePct}%</b></div><span>→</span><div><small>变量</small><b>${varPct}%</b></div></div><p>这只是本次训练的表现差异，不能证明拍面时机是原因。下一次做“保持测试”：不加提示，观察表现能否保留。</p></section>` : `<section class="interpretation ${weak.length ? 'needs-work' : ''}"><span class="eyebrow">${weak.length ? '下次多看一眼' : '本次达到 8/10 的组'}</span><p>${weak.length ? `需要继续练习：${weak.map((group) => group.name).join('、')}。` : '四组本次均达到 8/10。一次 8/10 不等于稳定掌握，请在之后的训练持续观察。'}</p><small>单次成绩只是一次观察，不代表已掌握。本地训练证据不代表 Director 正式评分或认证 PASS。</small></section>`}
     <div class="summary-actions">${draft && savedDraftSessionId ? `<button class="text-button" data-action="undo-final">↶ 撤销最后一组</button>` : ''}<button class="primary-button" data-action="navigate" data-to="home">回到首页</button><button class="secondary-button" data-action="navigate" data-to="history">查看训练历史</button></div>`)
 }
@@ -273,10 +530,10 @@ function renderHelp(from = 'home'): void {
   helpFrom = from
   shell(`<section class="page-intro"><span class="eyebrow">使用说明</span><h1>把手机放下，<br/><em>把训练留下。</em></h1><p>这是一份训练记录工具，不是每球打卡器。</p></section>
     <div class="mantra">十球再记，不逐球填；<br/>一次只改一个变量；<br/>当场变好，不等于学会；<br/>看录像以后，再决定下一步。</div>
-    <section class="help-section"><span class="number">01</span><div><h2>IPTPA L2｜四组放小球</h2><p>点“开始训练”后确认当前方向，手机放一边。完成 10 球，再点进目标区的成功数。应用自动进入下一组，依次完成正手直线、正手斜线、反手直线、反手斜线。最后看四组汇总和需要继续观察的弱项。</p><p>单次达到 8/10 只是本次成绩，不等于已经稳定掌握。</p></div></section>
+    <section class="help-section"><span class="number">01</span><div><h2>IPTPA L2｜23 项技能训练</h2><p>在 IPTPA 技能页点任意技能的“开始训练”或“继续训练”，手机放一边。完成 10 球，再点进目标区的成功数。第一次有效记录建立基线，之后进入训练中。单次达到 8/10 只是本次数量达到官方数量门槛，不等于已经稳定掌握，更不代表认证通过；正式通过仍需要 Director 判断动作基本功。</p><p>官方未给出具体喂球参数，本页不编造发球机位置、速度、频率、旋转、站位与目标区尺寸。</p></div></section>
     <section class="help-section"><span class="number">02</span><div><h2>重置球容易飞高｜个人实验</h2><p>先做基线 1、基线 2，各 10 球；再做变量 1–3，各 10 球。基线组不显示提示；变量组只提示“来球到达前，拍面已经朝向目标落点呈现”。本轮只改变拍面呈现时机。</p><p>“看不清”指无法判断该球是否成功；“无效喂球”指来球明显偏离预定练习条件，无法正常完成击球。这两类不算失败，会从成功率分母中排除。典型球可点“标记典型球”，自动记录时间，建议稍后结合录像回看。</p><p>结果只写本次训练表现差异，不证明变量导致变化。下一次做保持测试，取消提示观察表现能否保留。</p></div></section>
     <section class="help-section"><span class="number">03</span><div><h2>发球机与本机数据</h2><p>发球机设置首次使用或设置变化时修改即可，保存后长期复用。训练历史和设置保存在本机浏览器的本地数据库中；关闭后仍在这台设备上，无账号、后端或云同步。清除浏览器网站数据会删除本地记录。</p><p>记错一条：在“训练历史”里点该条记录下方的“删除这条记录”，再点“确认删除”即可，只删这一条，其他记录不受影响，删除后无法恢复。</p></div></section>
-    <section class="help-section"><span class="number">04</span><div><h2>添加到 iPhone 主屏幕</h2><p>用 Safari 打开部署网址 → 点分享 → 选择“添加到主屏幕” → 点“添加”。首次打开联网后会缓存应用；之后断网仍可打开已缓存版本。训练过程中不会自动刷新应用。</p><p>当前版本暂不包含人工智能自动诊断、逐球识别、苹果手表、云同步或全部 23 项认证训练。</p></div></section>
+    <section class="help-section"><span class="number">04</span><div><h2>添加到 iPhone 主屏幕</h2><p>用 Safari 打开部署网址 → 点分享 → 选择“添加到主屏幕” → 点“添加”。首次打开联网后会缓存应用；之后断网仍可打开已缓存版本。训练过程中不会自动刷新应用。</p><p>当前版本暂不包含人工智能自动诊断、逐球识别、苹果手表、云同步；23 项技能训练只记录本地 10 球成绩，不代表官方认证通过。</p></div></section>
     <button class="primary-button page-bottom-button" data-action="help-done">${from === 'home' ? '回到首页' : '返回训练'}</button>`, from === 'training' ? 'training' : 'home')
 }
 
@@ -314,10 +571,12 @@ function render(): void {
   }
   if (view === 'home') renderHome()
   else if (view === 'training') renderTraining()
+  else if (view === 'skill-training') renderSkillTraining()
   else if (view === 'help') renderHelp(helpFrom)
   else if (view === 'settings') renderSettings()
   else if (view === 'history') renderHistory()
-  else if (view === 'certification') renderCertification()
+  else if (view === 'iptpa-skills') renderIptpaSkills()
+  else if (view === 'pci-tasks') renderPciTasks()
 }
 
 function bind(): void {
@@ -332,44 +591,30 @@ function bind(): void {
         data.sessions = data.sessions.filter((session) => session.id !== targetId)
         if (savedDraftSessionId === targetId) savedDraftSessionId = null
         const core = data.certificationCore
-        if (core) {
-          const prefixes = [`session:${targetId}:`, `legacy:${targetId}:`]
-          core.evidence = core.evidence.filter((item) => !prefixes.some((prefix) => item.evidence_id.startsWith(prefix)))
-          for (const requirement of core.requirements) {
-            requirement.evidence_available = requirement.evidence_available.filter((id) => !prefixes.some((prefix) => id.startsWith(prefix)))
-            if (requirement.evidence_available.length === 0 && (requirement.training_status === 'BASELINE_MEASURED' || requirement.training_status === 'TRAINING')) {
-              requirement.training_status = 'UNTESTED'
-            }
-          }
-        }
+        if (core && targetId) removeSessionEvidence(core, targetId)
         pendingDeleteId = null
         historyNotice = '已删除一条训练记录'
         void saveData(data)
         renderHistory()
       }
+      if (action === 'skill-start') startSkill(element.dataset.requirementId ?? '')
       if (action === 'back') {
-        if (view === 'training' && !confirm('放弃本次未完成训练？')) return
-        if (view === 'training') draft = null
+        if ((view === 'training' || view === 'skill-training') && !confirm('放弃本次未完成训练？')) return
+        if (view === 'training' || view === 'skill-training') draft = null
         setView(element.dataset.to ?? 'home')
       }
       if (action === 'start') start(element.dataset.kind as Kind)
       if (action === 'score') recordScore(Number(element.dataset.score))
       if (action === 'undo' && draft?.undo.length) { draft.groups = draft.undo.pop()!; renderTraining() }
       if (action === 'undo-final' && draft?.undo.length && savedDraftSessionId) {
-        data.sessions = data.sessions.filter((session) => session.id !== savedDraftSessionId)
-        const removedPrefix = `session:${savedDraftSessionId}:`
+        const removedId = savedDraftSessionId
+        data.sessions = data.sessions.filter((session) => session.id !== removedId)
         const core = data.certificationCore!
-        core.evidence = core.evidence.filter((item) => !item.evidence_id.startsWith(removedPrefix))
-        for (const requirement of core.requirements) {
-          requirement.evidence_available = requirement.evidence_available.filter((id) => !id.startsWith(removedPrefix))
-          if (requirement.evidence_available.length === 0 && requirement.training_status === 'BASELINE_MEASURED') {
-            requirement.training_status = 'UNTESTED'
-          }
-        }
+        removeSessionEvidence(core, removedId)
         void saveData(data)
         draft.groups = draft.undo.pop()!
         savedDraftSessionId = null
-        setView('training')
+        setView(draft.isSkillTraining ? 'skill-training' : 'training')
       }
       if (action === 'exception' && draft) {
         const group = draft.groups.find((item) => item.success === null)!
@@ -383,7 +628,7 @@ function bind(): void {
         draft.groups.find((item) => item.success === null)!.markers.push(new Date().toISOString())
         renderTraining()
       }
-      if (action === 'cancel') { if (confirm('结束本次训练？未完成的成绩不会保存。')) { draft = null; setView('home') } }
+      if (action === 'cancel') { if (confirm('结束本次训练？未完成的成绩不会保存。')) { const wasSkill = draft?.isSkillTraining; draft = null; setView(wasSkill ? 'iptpa-skills' : 'home') } }
       if (action === 'training-help') renderHelp('training')
       if (action === 'help-done') setView(helpFrom === 'training' ? 'training' : 'home')
       if (action === 'welcome-close' || action === 'welcome-skip') { data.onboardingSeen = true; void saveData(data); renderHome() }

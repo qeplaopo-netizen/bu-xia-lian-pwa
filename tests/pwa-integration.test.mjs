@@ -9,7 +9,15 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
-const chromePath = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+import { existsSync } from 'node:fs'
+const chromeCandidates = [
+  process.env.CHROME_PATH,
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/usr/bin/google-chrome',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+].filter(Boolean)
+const chromePath = chromeCandidates.find((candidate) => existsSync(candidate)) ?? null
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 async function freePort() {
@@ -32,7 +40,11 @@ async function waitFor(check, message, attempts = 80) {
   throw new Error(message)
 }
 
-test('migrates an existing v1 IndexedDB record additively and keeps the PWA usable offline', { timeout: 60000 }, async () => {
+if (!chromePath) {
+  test('pwa integration skipped on this machine (no Chrome binary found)', () => {
+    assert.ok(true, 'Chrome is only available on the Mac; core tests still cover migration')
+  })
+} else test('migrates an existing v1 IndexedDB record additively and keeps the PWA usable offline', { timeout: 60000 }, async () => {
   const serverPort = await freePort()
   const debugPort = await freePort()
   const profile = await mkdtemp(path.join(os.tmpdir(), 'training-lab-implementation-slice-'))
@@ -191,29 +203,40 @@ test('migrates an existing v1 IndexedDB record additively and keeps the PWA usab
       .filter((item) => item.requirement_id.includes('-SKILL-DROP-'))
       .every((item) => item.training_status === 'BASELINE_MEASURED'))
 
-    await evaluate(`document.querySelector('[data-to="certification"]').click()`)
+    await evaluate(`document.querySelector('[data-to="iptpa-skills"]').click()`)
     const pageText = await waitFor(async () => {
       const text = await evaluate('document.body.innerText')
-      return text.includes('认证记录') ? text : null
-    }, 'Certification entry did not open')
-    assert.ok(pageText.includes('PCI L2'))
+      return text.includes('23 项技能') ? text : null
+    }, 'IPTPA skills entry did not open')
     assert.ok(pageText.includes('IPTPA L2'))
-    assert.ok(pageText.includes('Certification Status：UNKNOWN'))
-    assert.ok(!pageText.includes('91%'))
-    assert.ok(!pageText.includes('1/7'))
+    assert.ok(pageText.includes('尚未测试'))
+    assert.ok(!pageText.includes('Certification Status'))
+    assert.ok(!pageText.includes('Training Status'))
+    assert.ok(!pageText.includes('CONFIRMED_OFFICIAL'))
+    assert.ok(!pageText.includes('MAP_RECORDED_UNVERIFIED'))
     assert.ok(!/\d+\s*%/.test(pageText))
     assert.ok(await evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'))
 
+    await evaluate(`document.querySelector('[data-to="pci-tasks"]').click()`)
+    const pciText = await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('比赛记录分析') ? text : null
+    }, 'PCI tasks entry did not open')
+    assert.ok(pciText.includes('PCI L2'))
+    assert.ok(pciText.includes('先核对课程账户'))
+    assert.ok(pciText.includes('尚未与官方公开规则交叉核对'))
+    assert.ok(!pciText.includes('认证状态：官方已确认'))
+
     await evaluate(`document.querySelector('.wordmark[data-to="home"]').click()`)
-    await evaluate(`document.querySelector('[data-action="start"][data-kind="iptpa"]').click()`)
-    for (let group = 0; group < 4; group += 1) {
-      await evaluate(`document.querySelector('[data-action="score"][data-score="8"]').click()`)
-    }
+    await evaluate(`document.querySelector('[data-to="iptpa-skills"]').click()`)
+    await evaluate(`document.querySelector('[data-action="skill-start"]').click()`)
+    await evaluate(`document.querySelector('[data-action="score"][data-score="8"]').click()`)
     const resultText = await waitFor(async () => {
       const text = await evaluate('document.body.innerText')
       return text.includes('训练完成 · 已保存') ? text : null
     }, 'Training result did not finish saving')
-    assert.ok(resultText.includes('本地训练证据不代表 Director 正式评分或认证 PASS'))
+    assert.ok(resultText.includes('本次数量达到官方数量门槛'))
+    assert.ok(resultText.includes('本地成绩不代表认证 PASS'))
     const afterTraining = await waitFor(async () => {
       const value = await evaluate(`new Promise((resolve, reject) => {
         const open = indexedDB.open('bu-xia-lian');
@@ -231,7 +254,7 @@ test('migrates an existing v1 IndexedDB record additively and keeps the PWA usab
       return value.sessions.length === legacy.sessions.length + 1 ? value : null
     }, 'New IPTPA Session was not persisted')
     assert.deepEqual(afterTraining.sessions.slice(0, legacy.sessions.length), legacy.sessions)
-    assert.equal(afterTraining.sessions.at(-1).requirementIds.length, 4)
+    assert.equal(afterTraining.sessions.at(-1).requirementIds.length, 1)
     assert.ok(afterTraining.core.requirements.every((item) => item.certification_status === 'UNKNOWN'))
     assert.ok(afterTraining.core.requirements
       .filter((item) => item.requirement_id.includes('-SKILL-DROP-'))
@@ -244,11 +267,11 @@ test('migrates an existing v1 IndexedDB record additively and keeps the PWA usab
     assert.equal(worker, true)
     const cacheState = await evaluate(`(async () => {
       const names = await caches.keys();
-      const name = names.find((item) => item === 'bu-xia-lian-v2');
+      const name = names.find((item) => item === 'bu-xia-lian-v4');
       const requests = name ? await (await caches.open(name)).keys() : [];
       return { name, paths: requests.map((request) => new URL(request.url).pathname) };
     })()`)
-    assert.equal(cacheState.name, 'bu-xia-lian-v2')
+    assert.equal(cacheState.name, 'bu-xia-lian-v4')
     assert.ok(cacheState.paths.some((item) => item.endsWith('.js')))
     assert.ok(cacheState.paths.some((item) => item.endsWith('.css')))
 
