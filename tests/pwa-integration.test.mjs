@@ -265,6 +265,8 @@ if (!chromePath) {
     assert.equal(afterTraining.sessions.at(-1).requirementIds.length, 1)
     assert.equal(afterTraining.sessions.at(-1).conditionSnapshot.test_condition_status, 'LOCAL_PROTOCOL')
     assert.equal(afterTraining.sessions.at(-1).conditionSnapshot.machine_name, '旧设备')
+    assert.equal(afterTraining.sessions.at(-1).conditionSnapshot.protocol_version, 'LOCAL_IPTPA_L2_PROTOCOL_V1')
+    assert.equal(afterTraining.sessions.at(-1).conditionSnapshot.machine_spin, 'UNKNOWN')
     assert.ok(afterTraining.core.requirements.every((item) => item.certification_status === 'UNKNOWN'))
     assert.ok(afterTraining.core.requirements
       .filter((item) => item.requirement_id.includes('-SKILL-DROP-'))
@@ -279,11 +281,11 @@ if (!chromePath) {
     assert.equal(worker, true)
     const cacheState = await evaluate(`(async () => {
       const names = await caches.keys();
-      const name = names.find((item) => item === 'bu-xia-lian-v5');
+      const name = names.find((item) => item === 'bu-xia-lian-v6');
       const requests = name ? await (await caches.open(name)).keys() : [];
       return { name, paths: requests.map((request) => new URL(request.url).pathname) };
     })()`)
-    assert.equal(cacheState.name, 'bu-xia-lian-v5')
+    assert.equal(cacheState.name, 'bu-xia-lian-v6')
     assert.ok(cacheState.paths.some((item) => item.endsWith('.js')))
     assert.ok(cacheState.paths.some((item) => item.endsWith('.css')))
 

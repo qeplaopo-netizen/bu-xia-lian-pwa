@@ -29,3 +29,8 @@
 .certification-requirement-title{flex-wrap:wrap}
 .certification-requirement-title b{max-width:100%}
 @media(max-width:420px){.certification-card-heading{flex-wrap:wrap}.certification-card-heading strong{width:100%;text-align:left}}
+
+/* v1.3.2 font floor: ordinary readable info must not sit at 9-10px */
+.card-bottom,.duration,.quick-row,.training-top,.progress-meta,.score-caption,.tiny-note,.exception-box summary span,.cue span,.result-row>div:first-child small,.result-row>strong small,.results-title>span:last-child,.marker-count,.interpretation>small,.compare small,.privacy-card p,.history-card>p,.history-meta time,.history-scores b,.history-scores small,.recent-card span,.utility-card small,.tag,.step-mark{font-size:11px}
+.card-bottom{font-size:11px}
+@media(max-width:420px){.quick-row,.card-bottom,.duration,.record-heading span{font-size:11px}}

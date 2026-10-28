@@ -25,7 +25,7 @@ const defaults = {
   sessions: [],
   onboardingSeen: false,
 }
-const settings = { name: '斯波阿斯', speed: '5 档', interval: '4 秒', target: '厨房区前半段', notes: '低速' }
+const settings = { name: '斯波阿斯', speed: '5 档', interval: '4 秒', target: '非截击区前半段', notes: '低速' }
 
 function singleSession(id, groupName, success = 8, invalid = 0, unclear = 0) {
   return {
@@ -64,8 +64,8 @@ test('G3/G4 session snapshot copies current settings and is immutable to later s
   assert.equal(snapshot.machine_name, '斯波阿斯')
   assert.equal(snapshot.machine_speed, '5 档')
   assert.equal(snapshot.machine_interval, '4 秒')
-  assert.equal(snapshot.feed_target, '厨房区前半段')
-  assert.equal(snapshot.target_definition, '厨房区前半段靠近球网，直线方向')
+  assert.equal(snapshot.feed_target, '非截击区前半段')
+  assert.equal(snapshot.target_definition, '非截击区前半段靠近球网，直线方向')
   assert.equal(snapshot.success_definition, '10 球中至少 8 球落入目标区')
   assert.equal(snapshot.protocol_id, 'IPTPA-L2-SKILL-DINK-FH-STRAIGHT')
   const later = { ...settings, name: '另一台机器', speed: '9 档' }
@@ -74,7 +74,10 @@ test('G3/G4 session snapshot copies current settings and is immutable to later s
   assert.equal(snapshot.machine_name, '斯波阿斯')
   const noProtocol = buildSessionConditionSnapshot(settings, undefined)
   assert.equal(noProtocol.test_condition_status, 'UNVERIFIED')
-  assert.equal(noProtocol.protocol_id, '')
+  assert.equal(noProtocol.protocol_id, 'UNKNOWN')
+  assert.equal(noProtocol.protocol_version, 'UNKNOWN')
+  assert.equal(snapshot.machine_spin, 'UNKNOWN')
+  assert.equal(snapshot.protocol_version, 'LOCAL_IPTPA_L2_PROTOCOL_V1')
 })
 
 // G5: invalid feeds are excluded from the denominator
@@ -200,7 +203,7 @@ test('G16/G17/G18/G19/G20 UI: scale caption fixed, PCI top folded, no raw enums,
   assert.ok(main.includes('今天最值得做'), 'home must show 今天最值得做')
   assert.ok(main.includes('为什么推荐这个'), 'home must explain the recommendation')
   assert.ok(main.includes('本次训练条件'), 'skill confirm page must exist')
-  assert.ok(main.includes('开始 10 球'), 'skill confirm page must start 10 balls')
+  assert.ok(main.includes('确认条件并开始'), 'skill confirm page must confirm conditions before starting')
   assert.ok(main.includes('本次仅建立本地训练基线'), 'unverified confirm note must exist')
   for (const label of ['Certification Status', 'Training Status', 'Next Action', 'CONFIRMED_OFFICIAL', 'MAP_RECORDED_UNVERIFIED', 'TEST_CONDITION_STATUS']) {
     assert.ok(!main.includes(label), `main.ts must not show ${label} in the UI`)
@@ -221,7 +224,13 @@ test('C home recommendation follows blocker, in-progress, untested, fewest-evide
     'PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER': 'DONE_LOCAL',
     'PCI-L2-SUBMISSION-CHARTING': 'IN_PROGRESS',
   }
-  recommendation = recommendNextTask(core, blockersDone)
+  const blockersResolved = {
+    'PCI-L2-COURSE-PATHWAY': 'RESOLVED_LOCAL',
+    'PCI-L2-COURSE-VERSION': 'RESOLVED_LOCAL',
+    'PCI-L2-ELIGIBILITY-KNOWLEDGE-TEST': 'RESOLVED_LOCAL',
+    'PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER': 'RESOLVED_LOCAL',
+  }
+  recommendation = recommendNextTask(core, blockersDone, blockersResolved)
   assert.equal(recommendation.kind, 'pci')
   assert.equal(recommendation.requirement_id, 'PCI-L2-SUBMISSION-CHARTING')
   assert.ok(recommendation.reason.includes('正在进行中'))
@@ -230,7 +239,7 @@ test('C home recommendation follows blocker, in-progress, untested, fewest-evide
     'PCI-L2-COURSE-VERSION': 'DONE_LOCAL',
     'PCI-L2-ELIGIBILITY-KNOWLEDGE-TEST': 'DONE_LOCAL',
     'PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER': 'DONE_LOCAL',
-  })
+  }, blockersResolved)
   assert.equal(recommendation.kind, 'iptpa')
   assert.equal(recommendation.requirement_id, IPTPA_SKILL_DISPLAY[0].requirement_id)
   assert.ok(recommendation.reason.includes('尚未建立基线'))

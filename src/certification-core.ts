@@ -74,6 +74,12 @@ export type LegacySession = {
   skill_requirement_id?: string
   skill_name?: string
   conditionSnapshot?: SessionConditionSnapshot
+  attempt_unit?: AttemptUnit
+  total_attempts?: number
+  forehand_success?: number | null
+  backhand_success?: number | null
+  forehand_attempts?: number
+  backhand_attempts?: number
 }
 
 export type CertificationCore = {
@@ -90,6 +96,8 @@ export type AppRecord = {
   certificationCore?: CertificationCore
   pciTaskStatus?: Record<string, PciTaskStatus>
   pciTaskEvidence?: PciTaskEvidence[]
+  pciBlockerResolution?: Record<string, PciBlockerResolution>
+  pciOfficialConfirmation?: Record<string, PciOfficialConfirmation>
   [key: string]: unknown
 }
 
@@ -149,11 +157,19 @@ export function skillDisplayForRequirement(requirementId: string): IptpaSkillDis
 
 export type TestConditionStatus = 'UNVERIFIED' | 'LOCAL_PROTOCOL' | 'DIRECTOR_VERIFIED' | 'OFFICIAL_VERIFIED'
 
+export type AttemptUnit = 'BALL' | 'SET' | 'SPLIT'
+
 export type IptpaProtocol = {
   requirement_id: string
   skill_name: string
   source_file: string
   condition_status: TestConditionStatus
+  attempt_unit: AttemptUnit
+  total_attempts: number
+  forehand_attempts: number
+  backhand_attempts: number
+  protocol_version: string
+  source_note: string
   setup: string
   feed: string
   target: string
@@ -170,29 +186,29 @@ const LOCAL_SUCCESS = '10 球中至少 8 球落入目标区'
 const LOCAL_INVALID = '未在本地资料中明确定义'
 
 export const IPTPA_PROTOCOL_MAP: IptpaProtocol[] = [
-  { requirement_id: 'IPTPA-L2-SKILL-DINK-FH-STRAIGHT', skill_name: '正手直线网前小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器在对面 NVZ 后方或中场；你站 NVZ 线附近，正手前方接球', feed: '近网落点 + 定点球，低速低弧线', target: '厨房区前半段靠近球网，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '拍面稳，身前小钟摆，打完马上准备', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-DINK-FH-CROSS', skill_name: '正手斜线网前小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂正手侧；你站 NVZ 线附近', feed: '近网落点 + 交叉球，先定点再斜线', target: '对角厨房区前半段靠近球网', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '身体跟过去，拍面送到斜线，不加速', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-DINK-BH-STRAIGHT', skill_name: '反手直线网前小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器低速喂反手前方；你站 NVZ 线附近', feed: '近网落点 + 定点球', target: '厨房区前半段靠近球网，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '反手在身前接球，拍面安静，打完回中立', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-DINK-BH-CROSS', skill_name: '反手斜线网前小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂反手侧；你站 NVZ 线附近', feed: '近网落点 + 交叉球，先慢速定点再斜线', target: '对角厨房区前半段靠近球网', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '脚先到位，拍面朝目标，小幅送球', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-WINDSHIELD-WIPER-DINKS', skill_name: '横向扫动网前小球（Windshield-wiper）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你从中间开始；机器中-左-中-右循环', feed: '两线球 + 可编程球，宽度从窄两线开始', target: '每球都落厨房区前半段靠近球网', success_definition: '10 组中至少 8 组成功，每组包含左到右和右到左移动', invalid_definition: LOCAL_INVALID, fundamental_cues: '中间开始，侧滑步像雨刷，身体跟球不后退', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-DROP-FH-STRAIGHT', skill_name: '正手直线第三拍放小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器在对面底线或中后场；你从中后场吊球', feed: '定点球 + 深浅球', target: '回球落入对面厨房区前半段靠近球网，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '慢节奏吊进厨房，身体前进但拍不甩', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-DROP-FH-CROSS', skill_name: '正手斜线第三拍放小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂正手中后场；你从中后场吊球', feed: '深浅球 + 交叉球，第二组加入斜线角度', target: '对角厨房区前半段靠近球网', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '弧线安全过网，落点短，给自己上网时间', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-DROP-BH-STRAIGHT', skill_name: '反手直线第三拍放小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂反手中后场', feed: '定点球 + 深浅球，先不加旋转', target: '厨房区前半段靠近球网，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '肩膀带拍，击球在身前，球落短', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-DROP-BH-CROSS', skill_name: '反手斜线第三拍放小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂反手中后场', feed: '深浅球 + 交叉球，目标改为斜线厨房', target: '对角厨房区前半段靠近球网', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '先稳住身体，再用小弧线送到斜线', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-FH-STRAIGHT', skill_name: '正手直线截击', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你站 NVZ 线后；机器在对面中后场，喂胸口到正手侧', feed: '截击球 + 定点球', target: '后场 1/3，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '短挡短推，拍面稳，球要深', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-FH-CROSS', skill_name: '正手斜线截击', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你站 NVZ 线后；机器喂正手侧', feed: '截击球 + 交叉球，第二组加入两线移动', target: '对角后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '角度够用就行，深度第一，打完回拍', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-BH-STRAIGHT', skill_name: '反手直线截击', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你站 NVZ 线后；机器喂反手胸前，速度中低', feed: '截击球 + 定点球', target: '后场 1/3，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '拍头立住，身前挡深，马上准备', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-BH-CROSS', skill_name: '反手斜线截击', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你站 NVZ 线后；机器喂反手侧', feed: '截击球 + 交叉球，目标改斜线深区', target: '对角后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '脚先到，拍面顶住，深到后场', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-FH-STRAIGHT', skill_name: '正手直线落地击球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器在对面底线或中线；你站底线，正手深球', feed: '平击球 + 定点球', target: '后场 1/3，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '早准备，身前击球，穿过目标区', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-FH-CROSS', skill_name: '正手斜线落地击球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂正手深球；你站底线', feed: '平击球 + 交叉球，第二组加入轻微上旋', target: '对角后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '完整转体，打高过网，深度优先', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-BH-STRAIGHT', skill_name: '反手直线落地击球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂反手深球；你站底线', feed: '平击球 + 定点球，先不加随机', target: '后场 1/3，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '肩髋带动，拍面穿过球，打深', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-BH-CROSS', skill_name: '反手斜线落地击球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂反手深球；你站底线', feed: '平击球 + 交叉球，目标对角深区', target: '对角后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '重心向前，稳定过网，落到深区', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-RETURN-DEUCE', skill_name: '接发球 · 右区（Deuce）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器在对面右边发球位；你站右边接发区', feed: '平击球 + 上/下旋球 + 定点球，模拟发球', target: '回球到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '先分腿垫步，看清旋转，接深不抢攻', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-RETURN-AD', skill_name: '接发球 · 左区（Ad）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器在对面左边发球位；你站左边接发区', feed: '平击球 + 上/下旋球 + 定点球，模拟发球', target: '回球到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '深回球，稳定上步，准备第三拍', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-SERVE-DEUCE', skill_name: '发球 · 右区（Deuce）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你站右边发球区；不用机器', feed: '自发球', target: '发到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '节奏固定，触球干净，深度第一', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '不用机器，自发球' },
-  { requirement_id: 'IPTPA-L2-SKILL-SERVE-AD', skill_name: '发球 · 左区（Ad）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你站左边发球区；不用机器', feed: '自发球', target: '发到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '同一个节奏，同一个高度，打深区', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '不用机器，自发球' },
-  { requirement_id: 'IPTPA-L2-SKILL-OVERHEADS', skill_name: '高压球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器在对面中后场；你站场内，喂高球到头顶前方', feed: '高吊球，从低高度逐步升高', target: '后场 1/3 或深区空档，优先安全落点', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '侧身找球，左手指球，向下控制', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
-  { requirement_id: 'IPTPA-L2-SKILL-OFFENSIVE-LOBS', skill_name: '进攻挑高球（正手与反手）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂短球或中性球到你 NVZ 线附近；你站 NVZ 线附近', feed: '近网落点 + 定点球 + 高吊球微调', target: '高度足够，并落到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '先过人，再落深，挑完立刻回位', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '正手 5 球、反手 5 球；高度不够或落中场都不算' },
+  { requirement_id: 'IPTPA-L2-SKILL-DINK-FH-STRAIGHT', skill_name: '正手直线网前小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器在对面非截击区后方或中场；你站非截击区线附近，正手前方接球', feed: '近网落点 + 定点球，低速低弧线', target: '非截击区前半段靠近球网，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '拍面稳，身前小钟摆，打完马上准备', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DINK-FH-CROSS', skill_name: '正手斜线网前小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器喂正手侧；你站非截击区线附近', feed: '近网落点 + 交叉球，先定点再斜线', target: '对角非截击区前半段靠近球网', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '身体跟过去，拍面送到斜线，不加速', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DINK-BH-STRAIGHT', skill_name: '反手直线网前小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器低速喂反手前方；你站非截击区线附近', feed: '近网落点 + 定点球', target: '非截击区前半段靠近球网，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '反手在身前接球，拍面安静，打完回中立', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DINK-BH-CROSS', skill_name: '反手斜线网前小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器喂反手侧；你站非截击区线附近', feed: '近网落点 + 交叉球，先慢速定点再斜线', target: '对角非截击区前半段靠近球网', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '脚先到位，拍面朝目标，小幅送球', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-WINDSHIELD-WIPER-DINKS', skill_name: '横向扫动网前小球（Windshield-wiper）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'SET', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '你从中间开始；机器中-左-中-右循环', feed: '两线球 + 可编程球，宽度从窄两线开始', target: '每球都落非截击区前半段靠近球网', success_definition: '10 组中至少 8 组成功，每组包含左到右和右到左移动', invalid_definition: LOCAL_INVALID, fundamental_cues: '中间开始，侧滑步像雨刷，身体跟球不后退', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DROP-FH-STRAIGHT', skill_name: '正手直线第三拍放小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器在对面底线或中后场；你从中后场完成第三拍放小球', feed: '定点球 + 深浅球', target: '回球落入对面非截击区前半段靠近球网，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '慢节奏送进非截击区，身体前进但拍不甩', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DROP-FH-CROSS', skill_name: '正手斜线第三拍放小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器喂正手中后场；你从中后场完成第三拍放小球', feed: '深浅球 + 交叉球，第二组加入斜线角度', target: '对角非截击区前半段靠近球网', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '弧线安全过网，落点短，给自己上网时间', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DROP-BH-STRAIGHT', skill_name: '反手直线第三拍放小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器喂反手中后场', feed: '定点球 + 深浅球，先不加旋转', target: '非截击区前半段靠近球网，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '肩膀带拍，击球在身前，球落短', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DROP-BH-CROSS', skill_name: '反手斜线第三拍放小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器喂反手中后场', feed: '深浅球 + 交叉球，目标改为斜线非截击区', target: '对角非截击区前半段靠近球网', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '先稳住身体，再用小弧线送到斜线', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-FH-STRAIGHT', skill_name: '正手直线截击', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '你站非截击区线后；机器在对面中后场，喂胸口到正手侧', feed: '截击球 + 定点球', target: '后场 1/3，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '短挡短推，拍面稳，球要深', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-FH-CROSS', skill_name: '正手斜线截击', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '你站非截击区线后；机器喂正手侧', feed: '截击球 + 交叉球，第二组加入两线移动', target: '对角后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '角度够用就行，深度第一，打完回拍', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-BH-STRAIGHT', skill_name: '反手直线截击', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '你站非截击区线后；机器喂反手胸前，速度中低', feed: '截击球 + 定点球', target: '后场 1/3，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '拍头立住，身前挡深，马上准备', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-BH-CROSS', skill_name: '反手斜线截击', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '你站非截击区线后；机器喂反手侧', feed: '截击球 + 交叉球，目标改斜线深区', target: '对角后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '脚先到，拍面顶住，深到后场', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-FH-STRAIGHT', skill_name: '正手直线落地击球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器在对面底线或中线；你站底线，正手深球', feed: '平击球 + 定点球', target: '后场 1/3，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '早准备，身前击球，穿过目标区', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-FH-CROSS', skill_name: '正手斜线落地击球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器喂正手深球；你站底线', feed: '平击球 + 交叉球，第二组加入轻微上旋', target: '对角后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '完整转体，打高过网，深度优先', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-BH-STRAIGHT', skill_name: '反手直线落地击球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器喂反手深球；你站底线', feed: '平击球 + 定点球，先不加随机', target: '后场 1/3，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '肩髋带动，拍面穿过球，打深', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-BH-CROSS', skill_name: '反手斜线落地击球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器喂反手深球；你站底线', feed: '平击球 + 交叉球，目标对角深区', target: '对角后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '重心向前，稳定过网，落到深区', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-RETURN-DEUCE', skill_name: '接发球 · 右区（Deuce）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器在对面右边发球位；你站右边接发区', feed: '平击球 + 上/下旋球 + 定点球，模拟发球', target: '回球到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '先分腿垫步，看清旋转，接深不抢攻', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-RETURN-AD', skill_name: '接发球 · 左区（Ad）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器在对面左边发球位；你站左边接发区', feed: '平击球 + 上/下旋球 + 定点球，模拟发球', target: '回球到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '深回球，稳定上步，准备第三拍', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-SERVE-DEUCE', skill_name: '发球 · 右区（Deuce）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '你站右边发球区；不用机器', feed: '自发球', target: '发到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '节奏固定，触球干净，深度第一', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '不用机器，自发球' },
+  { requirement_id: 'IPTPA-L2-SKILL-SERVE-AD', skill_name: '发球 · 左区（Ad）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '你站左边发球区；不用机器', feed: '自发球', target: '发到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '同一个节奏，同一个高度，打深区', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '不用机器，自发球' },
+  { requirement_id: 'IPTPA-L2-SKILL-OVERHEADS', skill_name: '高压球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'BALL', total_attempts: 10, forehand_attempts: 0, backhand_attempts: 0, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器在对面中后场；你站场内，喂高球到头顶前方', feed: '高球，从低高度逐步升高', target: '后场 1/3 或深区空档，优先安全落点', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '侧身找球，左手指球，向下控制', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-OFFENSIVE-LOBS', skill_name: '进攻挑高球（正手与反手）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', attempt_unit: 'SPLIT', total_attempts: 10, forehand_attempts: 5, backhand_attempts: 5, protocol_version: 'LOCAL_IPTPA_L2_PROTOCOL_V1', source_note: '原始资料用语已按固定术语替换，不在普通界面显示。', setup: '机器喂短球或中性球到你 非截击区线附近；你站非截击区线附近', feed: '近网落点 + 定点球 + 高球微调', target: '高度足够，并落到对方后场 1/3', success_definition: '正手 5 球 + 反手 5 球，10 球中至少 8 球落入目标区', invalid_definition: LOCAL_INVALID, fundamental_cues: '先过人，再落深，挑完立刻回位', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '正手 5 球、反手 5 球；高度不够或落中场都不算' },
 ]
 
 export function protocolForRequirement(requirementId: string): IptpaProtocol | undefined {
@@ -208,22 +224,58 @@ export function displayTestConditionStatus(status: TestConditionStatus): string 
   }[status] ?? '未核实'
 }
 
-export function iptpaResultMessage(success: number, validBalls: number, conditionStatus: TestConditionStatus): string {
+export function iptpaResultMessage(
+  success: number,
+  validBalls: number,
+  conditionStatus: TestConditionStatus,
+  attemptUnit: AttemptUnit = 'BALL',
+  split?: { forehand: number; backhand: number },
+): string {
+  const unitSuffix = attemptUnit === 'SET' ? ' 组' : ''
+  const unitNoun = attemptUnit === 'SET' ? '组' : '球'
+  if (attemptUnit === 'SPLIT' && split) {
+    const total = `本次本地训练成绩：${success}/10（正手 ${split.forehand}/5 · 反手 ${split.backhand}/5）`
+    if (conditionStatus === 'DIRECTOR_VERIFIED' || conditionStatus === 'OFFICIAL_VERIFIED') {
+      return success >= 8 ? `${total}。本次数量达到 IPTPA 8/10 数量门槛。` : `${total}。本次数量未达到 8/10，继续训练。`
+    }
+    return success >= 8
+      ? `${total}。达到本地记录的 8/10 水平，但当前训练条件尚未与正式考核条件核实。`
+      : `${total}。本次数量未达到 8/10，继续训练。`
+  }
   if (validBalls < 10) {
-    return `本次本地训练成绩：${success}/${validBalls} 有效球。有效球不足 10 球，不直接与 8/10 比较。`
+    return `本次本地训练成绩：${success}/${validBalls} 有效${unitNoun}。有效${unitNoun}不足 10${unitNoun}，不直接与 8/10 比较。`
   }
   if (conditionStatus === 'DIRECTOR_VERIFIED' || conditionStatus === 'OFFICIAL_VERIFIED') {
-    return success >= 8 ? '本次数量达到 IPTPA 8/10 数量门槛。' : '本次数量未达到 8/10，继续训练。'
+    return success >= 8 ? `本次数量达到 IPTPA 8/10 数量门槛。` : '本次数量未达到 8/10，继续训练。'
   }
   return success >= 8
-    ? '本次本地训练成绩：8/10。达到本地记录的 8/10 水平，但当前训练条件尚未与正式考核条件核实。'
+    ? `本次本地训练成绩：${success}/10${unitSuffix}。达到本地记录的 8/10${unitSuffix}水平，但当前训练条件尚未与正式考核条件核实。`
     : '本次数量未达到 8/10，继续训练。'
+}
+
+export type RecentSkillResult = {
+  success: number
+  validBalls: number
+  attemptUnit: AttemptUnit
+  forehandSuccess: number | null
+  backhandSuccess: number | null
+}
+
+export function recentSkillResultLabel(result: RecentSkillResult): string {
+  if (result.attemptUnit === 'SET') return `最近一次：${result.success}/10 组`
+  if (result.attemptUnit === 'SPLIT' && result.forehandSuccess !== null && result.backhandSuccess !== null) {
+    return `最近一次：${result.success}/10（正手 ${result.forehandSuccess}/5 · 反手 ${result.backhandSuccess}/5）`
+  }
+  return `最近一次：${result.success}/${result.validBalls}`
 }
 
 export type SessionConditionSnapshot = {
   test_condition_status: TestConditionStatus
   protocol_id: string
   protocol_version: string
+  source_file: string
+  attempt_unit: AttemptUnit
+  total_attempts: number
   feed_source: string
   machine_name: string
   machine_speed: string
@@ -231,10 +283,14 @@ export type SessionConditionSnapshot = {
   machine_spin: string
   feed_target: string
   player_start_position: string
+  feed_definition: string
   target_definition: string
   success_definition: string
+  invalid_definition: string
   notes: string
 }
+
+const UNKNOWN_TEXT = 'UNKNOWN'
 
 export function buildSessionConditionSnapshot(
   settings: AppRecord['settings'],
@@ -242,18 +298,23 @@ export function buildSessionConditionSnapshot(
 ): SessionConditionSnapshot {
   return {
     test_condition_status: protocol?.condition_status ?? 'UNVERIFIED',
-    protocol_id: protocol?.requirement_id ?? '',
-    protocol_version: '',
-    feed_source: settings.name ? `发球机：${settings.name}` : '未记录',
-    machine_name: settings.name,
-    machine_speed: settings.speed,
-    machine_interval: settings.interval,
-    machine_spin: '',
-    feed_target: settings.target,
-    player_start_position: protocol?.setup ?? '',
-    target_definition: protocol?.target ?? '',
-    success_definition: protocol?.success_definition ?? '',
-    notes: settings.notes,
+    protocol_id: protocol?.requirement_id ?? UNKNOWN_TEXT,
+    protocol_version: protocol?.protocol_version ?? UNKNOWN_TEXT,
+    source_file: protocol?.source_file ?? UNKNOWN_TEXT,
+    attempt_unit: protocol?.attempt_unit ?? 'BALL',
+    total_attempts: protocol?.total_attempts ?? 10,
+    feed_source: settings.name ? `发球机：${settings.name}` : UNKNOWN_TEXT,
+    machine_name: settings.name || UNKNOWN_TEXT,
+    machine_speed: settings.speed || UNKNOWN_TEXT,
+    machine_interval: settings.interval || UNKNOWN_TEXT,
+    machine_spin: UNKNOWN_TEXT,
+    feed_target: settings.target || UNKNOWN_TEXT,
+    player_start_position: protocol?.setup || UNKNOWN_TEXT,
+    feed_definition: protocol?.feed || UNKNOWN_TEXT,
+    target_definition: protocol?.target || UNKNOWN_TEXT,
+    success_definition: protocol?.success_definition || UNKNOWN_TEXT,
+    invalid_definition: protocol?.invalid_definition || UNKNOWN_TEXT,
+    notes: settings.notes || UNKNOWN_TEXT,
   }
 }
 
@@ -283,6 +344,37 @@ export type PciTaskEvidence = {
   source: string
 }
 
+export function displayPciEvidenceType(evidenceType: string): string {
+  return {
+    LOCAL_REFERENCE: '本地引用',
+    OFFICIAL_RECORD: '官方记录',
+  }[evidenceType] ?? '本地引用'
+}
+
+export type PciBlockerResolution = 'NOT_CHECKED' | 'CHECKED_UNRESOLVED' | 'PENDING_OFFICIAL' | 'RESOLVED_LOCAL' | 'OFFICIAL_CONFIRMED'
+
+export function displayPciBlockerResolution(status: PciBlockerResolution): string {
+  return {
+    NOT_CHECKED: '尚未核对',
+    CHECKED_UNRESOLVED: '已核对 · 仍待处理',
+    PENDING_OFFICIAL: '已核对 · 尚待官方确认',
+    RESOLVED_LOCAL: '已核对 · 本地确认无阻塞',
+    OFFICIAL_CONFIRMED: '官方已确认',
+  }[status] ?? '尚未核对'
+}
+
+export type PciOfficialConfirmation = {
+  task_id: string
+  evidence_id: string
+  source: string
+  date: string
+  created_at: string
+}
+
+export function canSetOfficialConfirmation(source: string, date: string): boolean {
+  return source.trim() !== '' && date.trim() !== ''
+}
+
 export const PCI_BLOCKER_IDS = ['PCI-L2-COURSE-PATHWAY', 'PCI-L2-COURSE-VERSION', 'PCI-L2-ELIGIBILITY-KNOWLEDGE-TEST', 'PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER']
 
 export const PCI_TASK_ORDER = [
@@ -298,11 +390,21 @@ export type NextTaskRecommendation =
 export function recommendNextTask(
   core: CertificationCore,
   pciTaskStatus: Record<string, PciTaskStatus>,
+  pciBlockerResolution: Record<string, PciBlockerResolution> = {},
 ): NextTaskRecommendation | null {
   const pciStatus = (id: string): PciTaskStatus => pciTaskStatus[id] ?? 'NOT_STARTED'
+  const blockerResolved = (id: string): boolean => {
+    const resolution = pciBlockerResolution[id]
+    return resolution === 'RESOLVED_LOCAL' || resolution === 'OFFICIAL_CONFIRMED'
+  }
   for (const id of PCI_BLOCKER_IDS) {
-    if (pciStatus(id) !== 'DONE_LOCAL' && pciStatus(id) !== 'OFFICIAL_CONFIRMED') {
+    if (!blockerResolved(id)) {
       return { kind: 'pci', requirement_id: id, reason: '因为这是当前最早阻塞 PCI 后续任务的一项。' }
+    }
+  }
+  for (const id of PCI_TASK_ORDER) {
+    if (pciStatus(id) === 'NEEDS_REVISION') {
+      return { kind: 'pci', requirement_id: id, reason: '因为这项已被标记为需修改，应先处理。' }
     }
   }
   for (const id of PCI_TASK_ORDER) {
@@ -668,6 +770,28 @@ export function migrateAppRecord(raw: unknown, defaults: Omit<AppRecord, 'certif
   if (!Array.isArray(record.pciTaskEvidence)) {
     record.pciTaskEvidence = []
   }
+  if (!record.pciBlockerResolution || typeof record.pciBlockerResolution !== 'object' || Array.isArray(record.pciBlockerResolution)) {
+    record.pciBlockerResolution = {}
+  }
+  if (!record.pciOfficialConfirmation || typeof record.pciOfficialConfirmation !== 'object' || Array.isArray(record.pciOfficialConfirmation)) {
+    record.pciOfficialConfirmation = {}
+  }
+  // v1.3.2 correctness migration: an old task status of OFFICIAL_CONFIRMED was selectable
+  // without any official evidence, so it is downgraded to DONE_LOCAL; an old blocker
+  // "我已核对账户" (DONE_LOCAL) did not distinguish resolved from unresolved, so it
+  // becomes CHECKED_UNRESOLVED until the user explicitly records a resolution.
+  const oldTaskStatus = { ...record.pciTaskStatus }
+  for (const [id, status] of Object.entries(record.pciTaskStatus)) {
+    if (status === 'OFFICIAL_CONFIRMED') record.pciTaskStatus[id] = 'DONE_LOCAL'
+  }
+  for (const id of PCI_BLOCKER_IDS) {
+    if (!(id in record.pciBlockerResolution)) {
+      const oldStatus = oldTaskStatus[id]
+      record.pciBlockerResolution[id] = oldStatus === 'DONE_LOCAL' || oldStatus === 'OFFICIAL_CONFIRMED'
+        ? 'CHECKED_UNRESOLVED'
+        : 'NOT_CHECKED'
+    }
+  }
   if (!record.certificationCore) {
     record.certificationCore = createCertificationCore(record.sessions)
   } else {
@@ -702,7 +826,11 @@ export function appendTrainingSessionEvidence(
       captured_at: session.completedAt ?? session.startedAt,
       source_ref: `Session ${session.id}`,
       captured_by: 'Holiis',
-      subject: `${group.name}：${group.success}/10`,
+      subject: session.attempt_unit === 'SET'
+        ? `${group.name}：${group.success}/10 组`
+        : session.attempt_unit === 'SPLIT' && session.forehand_success !== undefined && session.backhand_success !== undefined
+          ? `${group.name}：${group.success}/10（正手 ${session.forehand_success}/5 · 反手 ${session.backhand_success}/5）`
+          : `${group.name}：${group.success}/10`,
       requirement_ids: [requirementId],
       verification_status: 'UNVERIFIED',
       authority: '用户本机训练记录',
