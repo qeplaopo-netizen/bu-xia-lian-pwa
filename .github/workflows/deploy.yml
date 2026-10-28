@@ -29,6 +29,14 @@ jobs:
         run: npm ci
       - name: Build
         run: npm run build
+      - name: Set up Chrome for integration tests
+        uses: browser-actions/setup-chrome@v1
+        with:
+          chrome-version: stable
+      - name: Expose Chrome path to tests
+        run: echo "CHROME_PATH=$(which google-chrome || which chromium || which chromium-browser)" >> "$GITHUB_ENV"
+      - name: Test (unit + browser integration; failure blocks deploy)
+        run: npm test
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

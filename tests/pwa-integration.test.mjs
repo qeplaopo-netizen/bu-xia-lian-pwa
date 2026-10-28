@@ -41,9 +41,15 @@ async function waitFor(check, message, attempts = 80) {
 }
 
 if (!chromePath) {
-  test('pwa integration skipped on this machine (no Chrome binary found)', () => {
-    assert.ok(true, 'Chrome is only available on the Mac; core tests still cover migration')
-  })
+  if (process.env.CI === 'true') {
+    test('pwa integration requires Chrome in CI', () => {
+      assert.fail('Chrome binary not found in CI; integration tests must not skip in CI')
+    })
+  } else {
+    test('pwa integration skipped on this machine (no Chrome binary found)', () => {
+      assert.ok(true, 'Chrome is only available on the Mac; core tests still cover migration')
+    })
+  }
 } else test('migrates an existing v1 IndexedDB record additively and keeps the PWA usable offline', { timeout: 60000 }, async () => {
   const serverPort = await freePort()
   const debugPort = await freePort()
@@ -274,6 +280,141 @@ if (!chromePath) {
     assert.equal(afterTraining.core.requirements
       .find((item) => item.requirement_id === 'IPTPA-L2-SKILL-DINK-FH-STRAIGHT').training_status, 'BASELINE_MEASURED')
 
+    // v1.3.3: Windshield-wiper is 10 SETs, with a true 7/9 set denominator after one invalid set.
+    await evaluate(`document.querySelector('.wordmark[data-to="home"]').click()`)
+    await evaluate(`document.querySelector('[data-to="iptpa-skills"]').click()`)
+    await evaluate(`document.querySelector('[data-requirement-id="IPTPA-L2-SKILL-WINDSHIELD-WIPER-DINKS"]').click()`)
+    const wiperConfirm = await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('本次训练条件') && text.includes('10 组') ? text : null
+    }, 'Windshield confirm page did not show 10 sets')
+    assert.ok(wiperConfirm.includes('10 组中至少 8 组成功'))
+    await evaluate(`document.querySelector('[data-action="skill-begin"]').click()`)
+    const wiperTraining = await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('这 10 组成功几组？') ? text : null
+    }, 'Windshield training page did not ask in sets')
+    assert.ok(wiperTraining)
+    await evaluate(`document.querySelector('[data-action="score"][data-score="8"]').click()`)
+    await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('训练完成 · 已保存') ? text : null
+    }, 'Windshield 8/10 set training did not save')
+    // Second windshield run: one invalid set, seven successes -> 7/9 sets.
+    await evaluate(`document.querySelector('.wordmark[data-to="home"]').click()`)
+    await evaluate(`document.querySelector('[data-to="iptpa-skills"]').click()`)
+    await evaluate(`document.querySelector('[data-requirement-id="IPTPA-L2-SKILL-WINDSHIELD-WIPER-DINKS"]').click()`)
+    await evaluate(`document.querySelector('[data-action="skill-begin"]').click()`)
+    await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('这 10 组成功几组？') ? text : null
+    }, 'Windshield second training page did not open')
+    await evaluate(`document.querySelector('[data-action="exception"][data-type="invalid"][data-delta="1"]').click()`)
+    await evaluate(`document.querySelector('[data-action="score"][data-score="7"]').click()`)
+    await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('训练完成 · 已保存') ? text : null
+    }, 'Windshield 7/9 set training did not save')
+
+    // v1.3.3: Offensive Lob is forehand 5 then backhand 5, kept as a split in history.
+    await evaluate(`document.querySelector('.wordmark[data-to="home"]').click()`)
+    await evaluate(`document.querySelector('[data-to="iptpa-skills"]').click()`)
+    await evaluate(`document.querySelector('[data-requirement-id="IPTPA-L2-SKILL-OFFENSIVE-LOBS"]').click()`)
+    const lobConfirm = await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('本次训练条件') && text.includes('正手 5 球 + 反手 5 球') ? text : null
+    }, 'Offensive Lob confirm page did not show 5+5')
+    assert.ok(lobConfirm)
+    await evaluate(`document.querySelector('[data-action="skill-begin"]').click()`)
+    await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('正手 5 球打进目标区几球？') ? text : null
+    }, 'Offensive Lob forehand step did not open')
+    await evaluate(`document.querySelector('[data-action="split-score"][data-score="4"]').click()`)
+    await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('反手 5 球打进目标区几球？') ? text : null
+    }, 'Offensive Lob backhand step did not open')
+    await evaluate(`document.querySelector('[data-action="split-score"][data-score="4"]').click()`)
+    await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('训练完成 · 已保存') ? text : null
+    }, 'Offensive Lob 4+4 training did not save')
+
+    // History must show the structured results directly in the main score area.
+    await evaluate(`document.querySelector('[data-action="navigate"][data-to="history"]').click()`)
+    const historyText = await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('7/9 组') && text.includes('正手 4/5') ? text : null
+    }, 'History did not show 7/9 sets and the 4/5 + 4/5 split')
+    assert.ok(historyText.includes('8/10 组'))
+    assert.ok(historyText.includes('反手 4/5'))
+
+    // v1.3.3: Final Package gate blocks READY via the status dropdown until the gate passes.
+    await evaluate(`document.querySelector('.wordmark[data-to="home"]').click()`)
+    await evaluate(`document.querySelector('[data-to="pci-tasks"]').click()`)
+    await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('比赛记录分析') ? text : null
+    }, 'PCI tasks did not reopen for the gate test')
+    await evaluate(`(() => { const select = document.querySelector('#pci-task-PCI-L2-SUBMISSION-FINAL-PACKAGE select'); select.value = 'READY'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`)
+    const gateText = await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('前置任务尚未完成') ? text : null
+    }, 'Final Package gate did not refuse READY')
+    assert.ok(gateText.includes('还差：'))
+    const blockedStatus = await evaluate(`new Promise((resolve, reject) => {
+      const open = indexedDB.open('bu-xia-lian');
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        const request = db.transaction('state').objectStore('state').get('app');
+        request.onsuccess = () => { resolve(request.result.pciTaskStatus['PCI-L2-SUBMISSION-FINAL-PACKAGE']); db.close(); };
+        request.onerror = () => reject(request.error);
+      };
+    })`)
+    assert.notEqual(blockedStatus, 'READY', 'Final Package READY must not be written while the gate fails')
+    // Satisfy the gate through the stored state, reload, then READY must be writable.
+    await evaluate(`new Promise((resolve, reject) => {
+      const open = indexedDB.open('bu-xia-lian');
+      open.onerror = () => reject(open.error);
+      open.onsuccess = () => {
+        const db = open.result;
+        const transaction = db.transaction('state', 'readwrite');
+        const store = transaction.objectStore('state');
+        const request = store.get('app');
+        request.onsuccess = () => {
+          const record = request.result;
+          record.pciBlockerResolution = { 'PCI-L2-COURSE-PATHWAY': 'RESOLVED_LOCAL', 'PCI-L2-COURSE-VERSION': 'RESOLVED_LOCAL', 'PCI-L2-ELIGIBILITY-KNOWLEDGE-TEST': 'RESOLVED_LOCAL', 'PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER': 'RESOLVED_LOCAL' };
+          record.pciTaskStatus = { ...record.pciTaskStatus, 'PCI-L2-COURSE-LESSONS': 'DONE_LOCAL', 'PCI-L2-SUBMISSION-LESSON-PLAN': 'DONE_LOCAL', 'PCI-L2-SUBMISSION-ADJUSTING-DIFFICULTY': 'DONE_LOCAL', 'PCI-L2-SUBMISSION-PPP': 'DONE_LOCAL', 'PCI-L2-SUBMISSION-QKOC': 'DONE_LOCAL', 'PCI-L2-SUBMISSION-CHARTING': 'DONE_LOCAL', 'PCI-L2-SUBMISSION-PLAYING-SKILLS': 'DONE_LOCAL' };
+          store.put(record, 'app');
+          transaction.oncomplete = () => { db.close(); resolve(true); };
+          transaction.onerror = () => reject(transaction.error);
+        };
+        request.onerror = () => reject(request.error);
+      };
+    })`)
+    await send('Page.reload', { ignoreCache: true })
+    await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('比赛记录分析') ? text : null
+    }, 'PCI tasks did not reload after satisfying the gate')
+    await evaluate(`(() => { const select = document.querySelector('#pci-task-PCI-L2-SUBMISSION-FINAL-PACKAGE select'); select.value = 'READY'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`)
+    const allowedStatus = await waitFor(async () => {
+      const value = await evaluate(`new Promise((resolve, reject) => {
+        const open = indexedDB.open('bu-xia-lian');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const request = db.transaction('state').objectStore('state').get('app');
+          request.onsuccess = () => { resolve(request.result.pciTaskStatus['PCI-L2-SUBMISSION-FINAL-PACKAGE']); db.close(); };
+          request.onerror = () => reject(request.error);
+        };
+      })`)
+      return value === 'READY' ? value : null
+    }, 'Final Package READY was not written after the gate passed')
+    assert.equal(allowedStatus, 'READY')
+
     const worker = await waitFor(async () => evaluate(`(async () => {
       const registration = await navigator.serviceWorker.getRegistration();
       return registration?.active?.state === 'activated' ? true : null;
@@ -281,11 +422,11 @@ if (!chromePath) {
     assert.equal(worker, true)
     const cacheState = await evaluate(`(async () => {
       const names = await caches.keys();
-      const name = names.find((item) => item === 'bu-xia-lian-v6');
+      const name = names.find((item) => item === 'bu-xia-lian-v7');
       const requests = name ? await (await caches.open(name)).keys() : [];
       return { name, paths: requests.map((request) => new URL(request.url).pathname) };
     })()`)
-    assert.equal(cacheState.name, 'bu-xia-lian-v6')
+    assert.equal(cacheState.name, 'bu-xia-lian-v7')
     assert.ok(cacheState.paths.some((item) => item.endsWith('.js')))
     assert.ok(cacheState.paths.some((item) => item.endsWith('.css')))
 

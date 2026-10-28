@@ -255,18 +255,51 @@ export function iptpaResultMessage(
 
 export type RecentSkillResult = {
   success: number
-  validBalls: number
+  validAttempts: number
   attemptUnit: AttemptUnit
   forehandSuccess: number | null
   backhandSuccess: number | null
 }
 
 export function recentSkillResultLabel(result: RecentSkillResult): string {
-  if (result.attemptUnit === 'SET') return `最近一次：${result.success}/10 组`
+  if (result.attemptUnit === 'SET') return `最近一次：${result.success}/${result.validAttempts} 组`
   if (result.attemptUnit === 'SPLIT' && result.forehandSuccess !== null && result.backhandSuccess !== null) {
     return `最近一次：${result.success}/10（正手 ${result.forehandSuccess}/5 · 反手 ${result.backhandSuccess}/5）`
   }
-  return `最近一次：${result.success}/${result.validBalls}`
+  return `最近一次：${result.success}/${result.validAttempts}`
+}
+
+export type FormattedSessionResult = {
+  main: string
+  detail: string
+  validAttempts: number
+  attemptUnit: AttemptUnit
+}
+
+export function formatSessionResult(session: {
+  kind: string
+  groups: Array<{ success: number | null; unclear: number; invalid: number }>
+  attempt_unit?: AttemptUnit
+  conditionSnapshot?: { attempt_unit?: AttemptUnit }
+  forehand_success?: number | null
+  backhand_success?: number | null
+}): FormattedSessionResult {
+  const group = session.groups[0]
+  const success = group?.success ?? 0
+  const validAttempts = Math.max(0, 10 - (group?.unclear ?? 0) - (group?.invalid ?? 0))
+  const attemptUnit = session.attempt_unit ?? session.conditionSnapshot?.attempt_unit ?? 'BALL'
+  if (attemptUnit === 'SET') return { main: `${success}/${validAttempts} 组`, detail: `${validAttempts} 有效组`, validAttempts, attemptUnit }
+  if (attemptUnit === 'SPLIT') {
+    const fh = session.forehand_success
+    const bh = session.backhand_success
+    return {
+      main: `${success}/10`,
+      detail: fh !== undefined && fh !== null && bh !== undefined && bh !== null ? `正手 ${fh}/5 · 反手 ${bh}/5` : '正反手分项未记录',
+      validAttempts,
+      attemptUnit,
+    }
+  }
+  return { main: `${success}/${validAttempts}`, detail: `${validAttempts} 有效球`, validAttempts, attemptUnit }
 }
 
 export type SessionConditionSnapshot = {
@@ -387,6 +420,41 @@ export type NextTaskRecommendation =
   | { kind: 'pci'; requirement_id: string; reason: string }
   | { kind: 'iptpa'; requirement_id: string; reason: string }
 
+export const PCI_FINAL_GATE_IDS = [
+  'PCI-L2-COURSE-PATHWAY', 'PCI-L2-COURSE-VERSION', 'PCI-L2-ELIGIBILITY-KNOWLEDGE-TEST', 'PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER', 'PCI-L2-COURSE-LESSONS',
+  'PCI-L2-SUBMISSION-LESSON-PLAN', 'PCI-L2-SUBMISSION-ADJUSTING-DIFFICULTY', 'PCI-L2-SUBMISSION-PPP', 'PCI-L2-SUBMISSION-QKOC', 'PCI-L2-SUBMISSION-CHARTING', 'PCI-L2-SUBMISSION-PLAYING-SKILLS',
+]
+
+export const PCI_NOT_STARTED_ORDER = [
+  'PCI-L2-COURSE-LESSONS', 'PCI-L2-SUBMISSION-LESSON-PLAN', 'PCI-L2-SUBMISSION-ADJUSTING-DIFFICULTY', 'PCI-L2-SUBMISSION-PPP', 'PCI-L2-SUBMISSION-QKOC', 'PCI-L2-SUBMISSION-CHARTING', 'PCI-L2-SUBMISSION-PLAYING-SKILLS', 'PCI-L2-SUBMISSION-FINAL-PACKAGE',
+]
+
+export function finalGateMissingIds(
+  pciTaskStatus: Record<string, PciTaskStatus>,
+  pciBlockerResolution: Record<string, PciBlockerResolution> = {},
+): string[] {
+  return PCI_FINAL_GATE_IDS.filter((id) => {
+    if (PCI_BLOCKER_IDS.includes(id)) {
+      const resolution = pciBlockerResolution[id]
+      return resolution !== 'RESOLVED_LOCAL' && resolution !== 'OFFICIAL_CONFIRMED'
+    }
+    const status = pciTaskStatus[id] ?? 'NOT_STARTED'
+    return status !== 'READY' && status !== 'DONE_LOCAL' && status !== 'SUBMITTED'
+  })
+}
+
+export function canSetPciTaskStatus(
+  taskId: string,
+  toStatus: PciTaskStatus,
+  pciTaskStatus: Record<string, PciTaskStatus>,
+  pciBlockerResolution: Record<string, PciBlockerResolution> = {},
+): { allowed: boolean; missing: string[] } {
+  if (taskId !== 'PCI-L2-SUBMISSION-FINAL-PACKAGE') return { allowed: true, missing: [] }
+  if (toStatus !== 'READY' && toStatus !== 'SUBMITTED' && toStatus !== 'DONE_LOCAL' && toStatus !== 'OFFICIAL_CONFIRMED') return { allowed: true, missing: [] }
+  const missing = finalGateMissingIds(pciTaskStatus, pciBlockerResolution)
+  return { allowed: missing.length === 0, missing }
+}
+
 export function recommendNextTask(
   core: CertificationCore,
   pciTaskStatus: Record<string, PciTaskStatus>,
@@ -411,6 +479,11 @@ export function recommendNextTask(
     const status = pciStatus(id)
     if (status === 'IN_PROGRESS' || status === 'READY') {
       return { kind: 'pci', requirement_id: id, reason: '因为这项正在进行中，先把它推进完。' }
+    }
+  }
+  for (const id of PCI_NOT_STARTED_ORDER) {
+    if (pciStatus(id) === 'NOT_STARTED') {
+      return { kind: 'pci', requirement_id: id, reason: '因为这是 PCI 下一项尚未开始的必要任务。' }
     }
   }
   const byId = new Map(core.requirements.map((item) => [item.requirement_id, item]))
@@ -790,6 +863,15 @@ export function migrateAppRecord(raw: unknown, defaults: Omit<AppRecord, 'certif
       record.pciBlockerResolution[id] = oldStatus === 'DONE_LOCAL' || oldStatus === 'OFFICIAL_CONFIRMED'
         ? 'CHECKED_UNRESOLVED'
         : 'NOT_CHECKED'
+    }
+  }
+  // v1.3.3 closure: an old Final Package READY / SUBMITTED / DONE_LOCAL that does not
+  // actually pass the gate is not a valid state; fall back to IN_PROGRESS, keep all
+  // other task data and evidence untouched.
+  const finalStatus = record.pciTaskStatus['PCI-L2-SUBMISSION-FINAL-PACKAGE']
+  if (finalStatus === 'READY' || finalStatus === 'SUBMITTED' || finalStatus === 'DONE_LOCAL') {
+    if (finalGateMissingIds(record.pciTaskStatus, record.pciBlockerResolution).length > 0) {
+      record.pciTaskStatus['PCI-L2-SUBMISSION-FINAL-PACKAGE'] = 'IN_PROGRESS'
     }
   }
   if (!record.certificationCore) {

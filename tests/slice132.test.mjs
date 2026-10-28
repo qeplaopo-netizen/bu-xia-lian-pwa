@@ -45,7 +45,6 @@ test('IPTPA 4-5 Windshield-wiper is 10 SETs, not 10 balls', () => {
   assert.ok(protocol.success_definition.includes('10 组中至少 8 组成功'))
   assert.ok(protocol.success_definition.includes('左到右和右到左'))
   assert.ok(main.includes('这 10 组成功几组？'), 'trainer question must be in sets')
-  assert.ok(main.includes('split-score') === false || true)
 })
 
 test('IPTPA 6-7 Offensive Lob is forced 5 + 5 and keeps the split in history', () => {
@@ -56,18 +55,18 @@ test('IPTPA 6-7 Offensive Lob is forced 5 + 5 and keeps the split in history', (
   assert.ok(protocol.success_definition.includes('正手 5 球 + 反手 5 球'))
   assert.ok(main.includes('正手 5 球 + 反手 5 球'), 'confirm page must show 5+5')
   assert.equal(
-    recentSkillResultLabel({ success: 8, validBalls: 10, attemptUnit: 'SPLIT', forehandSuccess: 4, backhandSuccess: 4 }),
+    recentSkillResultLabel({ success: 8, validAttempts: 10, attemptUnit: 'SPLIT', forehandSuccess: 4, backhandSuccess: 4 }),
     '最近一次：8/10（正手 4/5 · 反手 4/5）',
   )
   assert.equal(
-    recentSkillResultLabel({ success: 8, validBalls: 10, attemptUnit: 'SET', forehandSuccess: null, backhandSuccess: null }),
+    recentSkillResultLabel({ success: 8, validAttempts: 10, attemptUnit: 'SET', forehandSuccess: null, backhandSuccess: null }),
     '最近一次：8/10 组',
   )
 })
 
 test('IPTPA 8 recent history keeps the true denominator', () => {
   assert.equal(
-    recentSkillResultLabel({ success: 7, validBalls: 9, attemptUnit: 'BALL', forehandSuccess: null, backhandSuccess: null }),
+    recentSkillResultLabel({ success: 7, validAttempts: 9, attemptUnit: 'BALL', forehandSuccess: null, backhandSuccess: null }),
     '最近一次：7/9',
   )
   assert.ok(main.includes('recentSkillResultLabel'), 'skills list must use the structured recent result')
@@ -166,7 +165,7 @@ test('UI 23 onboarding no longer claims all training is 10 balls', () => {
   assert.ok(!main.includes('每组十球结束，再用一次点击记录'))
 })
 
-test('UI 24 390px has no horizontal overflow and UI 25-30 regressions', () => {
+test('UI 24 auxiliary CSS bounds only (real 390px overflow check lives in the browser integration test) and UI 25-30 regressions', () => {
   assert.ok(css.includes('min-width:320px'), 'page must stay at 320px minimum width')
   assert.ok(css.includes('max-width:780px'), 'page width is bounded')
   // Old v1.3.1 sessions still migrate (same DB, same shape)
@@ -188,5 +187,4 @@ test('UI 24 390px has no horizontal overflow and UI 25-30 regressions', () => {
   // No certification PASS from training
   assert.ok(core.includes("training evidence never changes certification status") || core.includes('certification_status'))
   assert.ok(!dist.includes('.mp4') && !dist.includes('.pdf') && !dist.includes('.vtt') && !dist.includes('.docx'), 'dist must not bundle paid course files')
-  assert.ok(main.includes('bu-xia-lian') || true)
 })

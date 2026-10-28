@@ -240,6 +240,23 @@ test('C home recommendation follows blocker, in-progress, untested, fewest-evide
     'PCI-L2-ELIGIBILITY-KNOWLEDGE-TEST': 'DONE_LOCAL',
     'PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER': 'DONE_LOCAL',
   }, blockersResolved)
+  assert.equal(recommendation.kind, 'pci')
+  assert.equal(recommendation.requirement_id, 'PCI-L2-COURSE-LESSONS')
+  assert.ok(recommendation.reason.includes('尚未开始'))
+  recommendation = recommendNextTask(core, {
+    'PCI-L2-COURSE-PATHWAY': 'DONE_LOCAL',
+    'PCI-L2-COURSE-VERSION': 'DONE_LOCAL',
+    'PCI-L2-ELIGIBILITY-KNOWLEDGE-TEST': 'DONE_LOCAL',
+    'PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER': 'DONE_LOCAL',
+    'PCI-L2-COURSE-LESSONS': 'DONE_LOCAL',
+    'PCI-L2-SUBMISSION-LESSON-PLAN': 'DONE_LOCAL',
+    'PCI-L2-SUBMISSION-ADJUSTING-DIFFICULTY': 'DONE_LOCAL',
+    'PCI-L2-SUBMISSION-PPP': 'DONE_LOCAL',
+    'PCI-L2-SUBMISSION-QKOC': 'DONE_LOCAL',
+    'PCI-L2-SUBMISSION-CHARTING': 'DONE_LOCAL',
+    'PCI-L2-SUBMISSION-PLAYING-SKILLS': 'DONE_LOCAL',
+    'PCI-L2-SUBMISSION-FINAL-PACKAGE': 'SUBMITTED',
+  }, blockersResolved)
   assert.equal(recommendation.kind, 'iptpa')
   assert.equal(recommendation.requirement_id, IPTPA_SKILL_DISPLAY[0].requirement_id)
   assert.ok(recommendation.reason.includes('尚未建立基线'))
