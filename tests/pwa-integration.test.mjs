@@ -54,7 +54,7 @@ if (!chromePath) {
   const serverPort = await freePort()
   const debugPort = await freePort()
   const profile = await mkdtemp(path.join(os.tmpdir(), 'training-lab-implementation-slice-'))
-  const server = spawn('npm', ['run', 'preview', '--', '--host', '127.0.0.1', '--port', String(serverPort), '--strictPort'], {
+  const server = spawn(path.join(projectRoot, 'node_modules/.bin/vite'), ['preview', '--host', '127.0.0.1', '--port', String(serverPort), '--strictPort'], {
     cwd: projectRoot,
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -223,6 +223,7 @@ if (!chromePath) {
     assert.ok(!/\d+\s*%/.test(pageText))
     assert.ok(await evaluate('document.documentElement.scrollWidth <= document.documentElement.clientWidth'))
 
+    await evaluate(`document.querySelector('.wordmark[data-to="home"]').click()`)
     await evaluate(`document.querySelector('[data-to="pci-tasks"]').click()`)
     const pciText = await waitFor(async () => {
       const text = await evaluate('document.body.innerText')
@@ -397,6 +398,11 @@ if (!chromePath) {
     await send('Page.reload', { ignoreCache: true })
     await waitFor(async () => {
       const text = await evaluate('document.body.innerText')
+      return text.includes('IPTPA L2') ? text : null
+    }, 'PWA did not reload after satisfying the gate')
+    await evaluate(`document.querySelector('[data-to="pci-tasks"]').click()`)
+    await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
       return text.includes('比赛记录分析') ? text : null
     }, 'PCI tasks did not reload after satisfying the gate')
     await evaluate(`(() => { const select = document.querySelector('#pci-task-PCI-L2-SUBMISSION-FINAL-PACKAGE select'); select.value = 'READY'; select.dispatchEvent(new Event('change', { bubbles: true })); })()`)
@@ -441,12 +447,17 @@ if (!chromePath) {
     assert.ok(await evaluate(`Boolean(navigator.serviceWorker.controller)`))
   } finally {
     const waitForExit = (child) => child.exitCode !== null ? Promise.resolve() : once(child, 'exit')
-    const chromeExit = waitForExit(chrome)
-    const serverExit = waitForExit(server)
-    socket?.close()
-    chrome.kill('SIGTERM')
-    server.kill('SIGTERM')
-    await Promise.allSettled([chromeExit, serverExit])
-    await rm(profile, { recursive: true, force: true })
+    try { socket?.close() } catch {}
+    try { chrome.kill('SIGTERM') } catch {}
+    try { server.kill('SIGTERM') } catch {}
+    await Promise.race([Promise.allSettled([waitForExit(chrome), waitForExit(server)]), pause(5000)])
+    try { chrome.kill('SIGKILL') } catch {}
+    try { server.kill('SIGKILL') } catch {}
+    await Promise.race([Promise.allSettled([waitForExit(chrome), waitForExit(server)]), pause(5000)])
+    // Cleanup must never mask the test result: Chrome may still be flushing its
+    // profile when it is killed, so retry once and then swallow any leftover error.
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try { await rm(profile, { recursive: true, force: true }); break } catch { await pause(500) }
+    }
   }
 })
