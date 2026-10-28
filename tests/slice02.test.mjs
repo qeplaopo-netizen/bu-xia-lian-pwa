@@ -155,7 +155,8 @@ test('PCI task page uses Learning Center references without claiming pending rul
 
 test('IPTPA skill page does not depend on a Learning Center directory and does not invent feeding parameters', () => {
   const main = readFileSync(path.join(projectRoot, 'src/main.ts'), 'utf8')
-  assert.ok(main.includes('官方未给出具体喂球参数，本页不编造'))
+  assert.ok(main.includes('不编造官方参数'))
+  assert.ok(main.includes('未经 Director 或官方核实'))
   assert.ok(!main.includes('learning-center'))
   for (const phrase of ['发球机位置：', '球速：', '频率：', '目标区尺寸：']) {
     assert.ok(!main.includes(phrase), phrase)

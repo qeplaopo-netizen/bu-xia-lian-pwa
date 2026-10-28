@@ -6,6 +6,26 @@
 
 .certification-card{margin:14px 0;padding:16px;background:#fffdf7;border:1px solid var(--line)}.certification-card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.certification-card-heading h2{margin:5px 0 0;font-size:22px;letter-spacing:-.04em}.certification-card-heading strong{font:10px var(--mono);text-align:right;color:#8b4b36;line-height:1.6}.certification-summary,.certification-next,.certification-footnote{font-size:11px;line-height:1.7;color:#626b60}.certification-card details{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:10px 0}.certification-card summary{min-height:36px;display:flex;align-items:center;cursor:pointer;font-size:12px;font-weight:700}.certification-list{list-style:none;padding:0;margin:0}.certification-requirement{padding:11px 0;border-top:1px solid #eeece4}.certification-requirement-title{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}.certification-requirement-title b{font-size:11px}.certification-requirement-title span,.certification-requirement small{font:9px var(--mono);color:#74796e}.certification-requirement small{display:block;margin-top:5px;line-height:1.6;overflow-wrap:anywhere}.certification-next{margin-bottom:0}.certification-footnote{margin:18px 0 0}.migration-warning{padding:12px;margin:10px 0;background:#f5ded4;color:#733d2e;font-size:12px;line-height:1.6}
 .skill-start-button{width:100%;margin-top:8px;min-height:44px}
+.skill-list{list-style:none;padding:0;margin:0}
+.skill-row{border-top:1px solid #eeece4}
+.skill-row-button{width:100%;border:0;background:transparent;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0;text-align:left}
+.skill-row-main{display:flex;flex-direction:column;gap:4px;min-width:0}
+.skill-row-main b{font-size:13px}
+.skill-row-main small{font-size:11px;color:#74796e;line-height:1.5}
+.skill-row-action{font-size:12px;font-weight:700;color:#587039;white-space:nowrap}
+.skill-category-card details summary{min-height:44px;display:flex;align-items:center;cursor:pointer;font-size:13px;font-weight:700}
+.pci-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.pci-actions .secondary-button{width:auto;min-height:44px;padding:0 14px;font-size:12px}
+.pci-status-label{display:flex;align-items:center;gap:10px;font-size:12px;font-weight:700;margin:10px 0}
+.pci-status-label select{min-height:44px;padding:0 10px;border:1px solid var(--line);background:#fffdf7;font-size:13px;flex:1}
+.pci-evidence-form{display:flex;flex-direction:column;gap:8px;margin:10px 0}
+.pci-evidence-form input{min-height:46px;padding:0 12px;border:1px solid var(--line);background:#fffdf7;font-size:13px;width:100%}
+.pci-evidence-form .secondary-button{min-height:44px;font-size:12px}
+.pci-evidence-list{margin:8px 0}
+.certification-summary,.certification-next,.certification-footnote{font-size:12px}
+.certification-requirement-title span,.certification-requirement small{font-size:11px}
+.certification-card-heading strong{font-size:11px}
+.record-heading span{font-size:11px}
 .certification-requirement-title{flex-wrap:wrap}
 .certification-requirement-title b{max-width:100%}
 @media(max-width:420px){.certification-card-heading{flex-wrap:wrap}.certification-card-heading strong{width:100%;text-align:left}}

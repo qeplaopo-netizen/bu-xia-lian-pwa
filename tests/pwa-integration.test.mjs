@@ -223,19 +223,27 @@ if (!chromePath) {
       return text.includes('比赛记录分析') ? text : null
     }, 'PCI tasks entry did not open')
     assert.ok(pciText.includes('PCI L2'))
-    assert.ok(pciText.includes('先核对课程账户'))
-    assert.ok(pciText.includes('尚未与官方公开规则交叉核对'))
+    assert.ok(pciText.includes('当前下一步'))
+    assert.ok(pciText.includes('资料与证据说明'))
     assert.ok(!pciText.includes('认证状态：官方已确认'))
 
     await evaluate(`document.querySelector('.wordmark[data-to="home"]').click()`)
     await evaluate(`document.querySelector('[data-to="iptpa-skills"]').click()`)
-    await evaluate(`document.querySelector('[data-action="skill-start"]').click()`)
+    await evaluate(`document.querySelector('[data-action="skill-confirm"]').click()`)
+    const confirmText = await waitFor(async () => {
+      const text = await evaluate('document.body.innerText')
+      return text.includes('本次训练条件') ? text : null
+    }, 'Skill confirm page did not open')
+    assert.ok(confirmText.includes('本地训练协议'))
+    await evaluate(`document.querySelector('[data-action="skill-begin"]').click()`)
     await evaluate(`document.querySelector('[data-action="score"][data-score="8"]').click()`)
     const resultText = await waitFor(async () => {
       const text = await evaluate('document.body.innerText')
       return text.includes('训练完成 · 已保存') ? text : null
     }, 'Training result did not finish saving')
-    assert.ok(resultText.includes('本次数量达到官方数量门槛'))
+    assert.ok(resultText.includes('本次本地训练成绩：8/10'))
+    assert.ok(resultText.includes('尚未与正式考核条件核实'))
+    assert.ok(!resultText.includes('达到官方数量门槛'))
     assert.ok(resultText.includes('本地成绩不代表认证 PASS'))
     const afterTraining = await waitFor(async () => {
       const value = await evaluate(`new Promise((resolve, reject) => {
@@ -255,10 +263,14 @@ if (!chromePath) {
     }, 'New IPTPA Session was not persisted')
     assert.deepEqual(afterTraining.sessions.slice(0, legacy.sessions.length), legacy.sessions)
     assert.equal(afterTraining.sessions.at(-1).requirementIds.length, 1)
+    assert.equal(afterTraining.sessions.at(-1).conditionSnapshot.test_condition_status, 'LOCAL_PROTOCOL')
+    assert.equal(afterTraining.sessions.at(-1).conditionSnapshot.machine_name, '旧设备')
     assert.ok(afterTraining.core.requirements.every((item) => item.certification_status === 'UNKNOWN'))
     assert.ok(afterTraining.core.requirements
       .filter((item) => item.requirement_id.includes('-SKILL-DROP-'))
-      .every((item) => item.training_status === 'TRAINING'))
+      .every((item) => item.training_status === 'BASELINE_MEASURED'))
+    assert.equal(afterTraining.core.requirements
+      .find((item) => item.requirement_id === 'IPTPA-L2-SKILL-DINK-FH-STRAIGHT').training_status, 'BASELINE_MEASURED')
 
     const worker = await waitFor(async () => evaluate(`(async () => {
       const registration = await navigator.serviceWorker.getRegistration();
@@ -267,11 +279,11 @@ if (!chromePath) {
     assert.equal(worker, true)
     const cacheState = await evaluate(`(async () => {
       const names = await caches.keys();
-      const name = names.find((item) => item === 'bu-xia-lian-v4');
+      const name = names.find((item) => item === 'bu-xia-lian-v5');
       const requests = name ? await (await caches.open(name)).keys() : [];
       return { name, paths: requests.map((request) => new URL(request.url).pathname) };
     })()`)
-    assert.equal(cacheState.name, 'bu-xia-lian-v4')
+    assert.equal(cacheState.name, 'bu-xia-lian-v5')
     assert.ok(cacheState.paths.some((item) => item.endsWith('.js')))
     assert.ok(cacheState.paths.some((item) => item.endsWith('.css')))
 

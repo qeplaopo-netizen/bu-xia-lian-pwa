@@ -71,6 +71,9 @@ export type LegacySession = {
   groups: LegacyGroup[]
   requirementIds?: string[]
   evidenceIds?: string[]
+  skill_requirement_id?: string
+  skill_name?: string
+  conditionSnapshot?: SessionConditionSnapshot
 }
 
 export type CertificationCore = {
@@ -85,6 +88,8 @@ export type AppRecord = {
   sessions: LegacySession[]
   onboardingSeen: boolean
   certificationCore?: CertificationCore
+  pciTaskStatus?: Record<string, PciTaskStatus>
+  pciTaskEvidence?: PciTaskEvidence[]
   [key: string]: unknown
 }
 
@@ -142,6 +147,190 @@ export function skillDisplayForRequirement(requirementId: string): IptpaSkillDis
   return IPTPA_SKILL_DISPLAY.find((skill) => skill.requirement_id === requirementId)
 }
 
+export type TestConditionStatus = 'UNVERIFIED' | 'LOCAL_PROTOCOL' | 'DIRECTOR_VERIFIED' | 'OFFICIAL_VERIFIED'
+
+export type IptpaProtocol = {
+  requirement_id: string
+  skill_name: string
+  source_file: string
+  condition_status: TestConditionStatus
+  setup: string
+  feed: string
+  target: string
+  success_definition: string
+  invalid_definition: string
+  fundamental_cues: string
+  source_authority: string
+  notes: string
+}
+
+const LOCAL_PROTOCOL_SOURCE = '斯波阿斯SS-C2401A发球机4周训练计划.md + 技能测试与观摩教学课评估清单.md'
+const LOCAL_PROTOCOL_AUTHORITY = '本地训练计划（用户备考资料，非官方原文、非 Director 核实）'
+const LOCAL_SUCCESS = '10 球中至少 8 球落入目标区'
+const LOCAL_INVALID = '未在本地资料中明确定义'
+
+export const IPTPA_PROTOCOL_MAP: IptpaProtocol[] = [
+  { requirement_id: 'IPTPA-L2-SKILL-DINK-FH-STRAIGHT', skill_name: '正手直线网前小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器在对面 NVZ 后方或中场；你站 NVZ 线附近，正手前方接球', feed: '近网落点 + 定点球，低速低弧线', target: '厨房区前半段靠近球网，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '拍面稳，身前小钟摆，打完马上准备', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DINK-FH-CROSS', skill_name: '正手斜线网前小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂正手侧；你站 NVZ 线附近', feed: '近网落点 + 交叉球，先定点再斜线', target: '对角厨房区前半段靠近球网', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '身体跟过去，拍面送到斜线，不加速', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DINK-BH-STRAIGHT', skill_name: '反手直线网前小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器低速喂反手前方；你站 NVZ 线附近', feed: '近网落点 + 定点球', target: '厨房区前半段靠近球网，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '反手在身前接球，拍面安静，打完回中立', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DINK-BH-CROSS', skill_name: '反手斜线网前小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂反手侧；你站 NVZ 线附近', feed: '近网落点 + 交叉球，先慢速定点再斜线', target: '对角厨房区前半段靠近球网', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '脚先到位，拍面朝目标，小幅送球', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-WINDSHIELD-WIPER-DINKS', skill_name: '横向扫动网前小球（Windshield-wiper）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你从中间开始；机器中-左-中-右循环', feed: '两线球 + 可编程球，宽度从窄两线开始', target: '每球都落厨房区前半段靠近球网', success_definition: '10 组中至少 8 组成功，每组包含左到右和右到左移动', invalid_definition: LOCAL_INVALID, fundamental_cues: '中间开始，侧滑步像雨刷，身体跟球不后退', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DROP-FH-STRAIGHT', skill_name: '正手直线第三拍放小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器在对面底线或中后场；你从中后场吊球', feed: '定点球 + 深浅球', target: '回球落入对面厨房区前半段靠近球网，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '慢节奏吊进厨房，身体前进但拍不甩', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DROP-FH-CROSS', skill_name: '正手斜线第三拍放小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂正手中后场；你从中后场吊球', feed: '深浅球 + 交叉球，第二组加入斜线角度', target: '对角厨房区前半段靠近球网', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '弧线安全过网，落点短，给自己上网时间', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DROP-BH-STRAIGHT', skill_name: '反手直线第三拍放小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂反手中后场', feed: '定点球 + 深浅球，先不加旋转', target: '厨房区前半段靠近球网，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '肩膀带拍，击球在身前，球落短', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-DROP-BH-CROSS', skill_name: '反手斜线第三拍放小球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂反手中后场', feed: '深浅球 + 交叉球，目标改为斜线厨房', target: '对角厨房区前半段靠近球网', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '先稳住身体，再用小弧线送到斜线', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-FH-STRAIGHT', skill_name: '正手直线截击', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你站 NVZ 线后；机器在对面中后场，喂胸口到正手侧', feed: '截击球 + 定点球', target: '后场 1/3，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '短挡短推，拍面稳，球要深', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-FH-CROSS', skill_name: '正手斜线截击', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你站 NVZ 线后；机器喂正手侧', feed: '截击球 + 交叉球，第二组加入两线移动', target: '对角后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '角度够用就行，深度第一，打完回拍', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-BH-STRAIGHT', skill_name: '反手直线截击', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你站 NVZ 线后；机器喂反手胸前，速度中低', feed: '截击球 + 定点球', target: '后场 1/3，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '拍头立住，身前挡深，马上准备', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-VOLLEY-BH-CROSS', skill_name: '反手斜线截击', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你站 NVZ 线后；机器喂反手侧', feed: '截击球 + 交叉球，目标改斜线深区', target: '对角后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '脚先到，拍面顶住，深到后场', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-FH-STRAIGHT', skill_name: '正手直线落地击球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器在对面底线或中线；你站底线，正手深球', feed: '平击球 + 定点球', target: '后场 1/3，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '早准备，身前击球，穿过目标区', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-FH-CROSS', skill_name: '正手斜线落地击球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂正手深球；你站底线', feed: '平击球 + 交叉球，第二组加入轻微上旋', target: '对角后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '完整转体，打高过网，深度优先', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-BH-STRAIGHT', skill_name: '反手直线落地击球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂反手深球；你站底线', feed: '平击球 + 定点球，先不加随机', target: '后场 1/3，直线方向', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '肩髋带动，拍面穿过球，打深', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-GROUNDSTROKE-BH-CROSS', skill_name: '反手斜线落地击球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂反手深球；你站底线', feed: '平击球 + 交叉球，目标对角深区', target: '对角后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '重心向前，稳定过网，落到深区', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-RETURN-DEUCE', skill_name: '接发球 · 右区（Deuce）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器在对面右边发球位；你站右边接发区', feed: '平击球 + 上/下旋球 + 定点球，模拟发球', target: '回球到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '先分腿垫步，看清旋转，接深不抢攻', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-RETURN-AD', skill_name: '接发球 · 左区（Ad）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器在对面左边发球位；你站左边接发区', feed: '平击球 + 上/下旋球 + 定点球，模拟发球', target: '回球到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '深回球，稳定上步，准备第三拍', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-SERVE-DEUCE', skill_name: '发球 · 右区（Deuce）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你站右边发球区；不用机器', feed: '自发球', target: '发到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '节奏固定，触球干净，深度第一', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '不用机器，自发球' },
+  { requirement_id: 'IPTPA-L2-SKILL-SERVE-AD', skill_name: '发球 · 左区（Ad）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '你站左边发球区；不用机器', feed: '自发球', target: '发到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '同一个节奏，同一个高度，打深区', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '不用机器，自发球' },
+  { requirement_id: 'IPTPA-L2-SKILL-OVERHEADS', skill_name: '高压球', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器在对面中后场；你站场内，喂高球到头顶前方', feed: '高吊球，从低高度逐步升高', target: '后场 1/3 或深区空档，优先安全落点', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '侧身找球，左手指球，向下控制', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '' },
+  { requirement_id: 'IPTPA-L2-SKILL-OFFENSIVE-LOBS', skill_name: '进攻挑高球（正手与反手）', source_file: LOCAL_PROTOCOL_SOURCE, condition_status: 'LOCAL_PROTOCOL', setup: '机器喂短球或中性球到你 NVZ 线附近；你站 NVZ 线附近', feed: '近网落点 + 定点球 + 高吊球微调', target: '高度足够，并落到对方后场 1/3', success_definition: LOCAL_SUCCESS, invalid_definition: LOCAL_INVALID, fundamental_cues: '先过人，再落深，挑完立刻回位', source_authority: LOCAL_PROTOCOL_AUTHORITY, notes: '正手 5 球、反手 5 球；高度不够或落中场都不算' },
+]
+
+export function protocolForRequirement(requirementId: string): IptpaProtocol | undefined {
+  return IPTPA_PROTOCOL_MAP.find((item) => item.requirement_id === requirementId)
+}
+
+export function displayTestConditionStatus(status: TestConditionStatus): string {
+  return {
+    UNVERIFIED: '未核实',
+    LOCAL_PROTOCOL: '本地训练协议',
+    DIRECTOR_VERIFIED: 'Director 已核实',
+    OFFICIAL_VERIFIED: '官方已核实',
+  }[status] ?? '未核实'
+}
+
+export function iptpaResultMessage(success: number, validBalls: number, conditionStatus: TestConditionStatus): string {
+  if (validBalls < 10) {
+    return `本次本地训练成绩：${success}/${validBalls} 有效球。有效球不足 10 球，不直接与 8/10 比较。`
+  }
+  if (conditionStatus === 'DIRECTOR_VERIFIED' || conditionStatus === 'OFFICIAL_VERIFIED') {
+    return success >= 8 ? '本次数量达到 IPTPA 8/10 数量门槛。' : '本次数量未达到 8/10，继续训练。'
+  }
+  return success >= 8
+    ? '本次本地训练成绩：8/10。达到本地记录的 8/10 水平，但当前训练条件尚未与正式考核条件核实。'
+    : '本次数量未达到 8/10，继续训练。'
+}
+
+export type SessionConditionSnapshot = {
+  test_condition_status: TestConditionStatus
+  protocol_id: string
+  protocol_version: string
+  feed_source: string
+  machine_name: string
+  machine_speed: string
+  machine_interval: string
+  machine_spin: string
+  feed_target: string
+  player_start_position: string
+  target_definition: string
+  success_definition: string
+  notes: string
+}
+
+export function buildSessionConditionSnapshot(
+  settings: AppRecord['settings'],
+  protocol: IptpaProtocol | undefined,
+): SessionConditionSnapshot {
+  return {
+    test_condition_status: protocol?.condition_status ?? 'UNVERIFIED',
+    protocol_id: protocol?.requirement_id ?? '',
+    protocol_version: '',
+    feed_source: settings.name ? `发球机：${settings.name}` : '未记录',
+    machine_name: settings.name,
+    machine_speed: settings.speed,
+    machine_interval: settings.interval,
+    machine_spin: '',
+    feed_target: settings.target,
+    player_start_position: protocol?.setup ?? '',
+    target_definition: protocol?.target ?? '',
+    success_definition: protocol?.success_definition ?? '',
+    notes: settings.notes,
+  }
+}
+
+export type PciTaskStatus = 'NOT_STARTED' | 'IN_PROGRESS' | 'READY' | 'SUBMITTED' | 'NEEDS_REVISION' | 'DONE_LOCAL' | 'OFFICIAL_CONFIRMED'
+
+export function displayPciTaskStatus(status: PciTaskStatus): string {
+  return {
+    NOT_STARTED: '未开始',
+    IN_PROGRESS: '进行中',
+    READY: '已准备',
+    SUBMITTED: '已提交',
+    NEEDS_REVISION: '需修改',
+    DONE_LOCAL: '本地已完成',
+    OFFICIAL_CONFIRMED: '官方已确认',
+  }[status] ?? '未开始'
+}
+
+export type PciTaskEvidence = {
+  evidence_id: string
+  task_id: string
+  evidence_type: string
+  local_path: string
+  note: string
+  url: string
+  created_at: string
+  status: string
+  source: string
+}
+
+export const PCI_BLOCKER_IDS = ['PCI-L2-COURSE-PATHWAY', 'PCI-L2-COURSE-VERSION', 'PCI-L2-ELIGIBILITY-KNOWLEDGE-TEST', 'PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER']
+
+export const PCI_TASK_ORDER = [
+  'PCI-L2-COURSE-PATHWAY', 'PCI-L2-COURSE-VERSION', 'PCI-L2-ELIGIBILITY-KNOWLEDGE-TEST', 'PCI-L2-ELIGIBILITY-L1-EVALUATION-WAIVER', 'PCI-L2-COURSE-LESSONS',
+  'PCI-L2-SUBMISSION-LESSON-PLAN', 'PCI-L2-SUBMISSION-ADJUSTING-DIFFICULTY', 'PCI-L2-SUBMISSION-PPP', 'PCI-L2-SUBMISSION-QKOC', 'PCI-L2-SUBMISSION-CHARTING', 'PCI-L2-SUBMISSION-PLAYING-SKILLS',
+  'PCI-L2-SUBMISSION-FINAL-PACKAGE', 'PCI-L2-CREDENTIAL-ISSUED',
+]
+
+export type NextTaskRecommendation =
+  | { kind: 'pci'; requirement_id: string; reason: string }
+  | { kind: 'iptpa'; requirement_id: string; reason: string }
+
+export function recommendNextTask(
+  core: CertificationCore,
+  pciTaskStatus: Record<string, PciTaskStatus>,
+): NextTaskRecommendation | null {
+  const pciStatus = (id: string): PciTaskStatus => pciTaskStatus[id] ?? 'NOT_STARTED'
+  for (const id of PCI_BLOCKER_IDS) {
+    if (pciStatus(id) !== 'DONE_LOCAL' && pciStatus(id) !== 'OFFICIAL_CONFIRMED') {
+      return { kind: 'pci', requirement_id: id, reason: '因为这是当前最早阻塞 PCI 后续任务的一项。' }
+    }
+  }
+  for (const id of PCI_TASK_ORDER) {
+    const status = pciStatus(id)
+    if (status === 'IN_PROGRESS' || status === 'READY') {
+      return { kind: 'pci', requirement_id: id, reason: '因为这项正在进行中，先把它推进完。' }
+    }
+  }
+  const byId = new Map(core.requirements.map((item) => [item.requirement_id, item]))
+  for (const skill of IPTPA_SKILL_DISPLAY) {
+    const requirement = byId.get(skill.requirement_id)
+    if (requirement && derivedSkillTrainingStatus(requirement) === 'UNTESTED') {
+      return { kind: 'iptpa', requirement_id: skill.requirement_id, reason: '因为 IPTPA 还有尚未建立基线的技能，先从第一项未测试技能开始。' }
+    }
+  }
+  let best: { skill: (typeof IPTPA_SKILL_DISPLAY)[number]; count: number } | null = null
+  for (const skill of IPTPA_SKILL_DISPLAY) {
+    const requirement = byId.get(skill.requirement_id)
+    if (!requirement) continue
+    const count = requirement.evidence_available.length
+    if (!best || count < best.count) best = { skill, count }
+  }
+  if (best) {
+    return { kind: 'iptpa', requirement_id: best.skill.requirement_id, reason: '因为这项的训练证据最少，最值得补一次。' }
+  }
+  return null
+}
+
 export function displayTrainingStatus(status: TrainingStatus): string {
   return {
     UNKNOWN: '待核实',
@@ -189,11 +378,16 @@ export function displayEvidenceType(evidenceType: EvidenceType): string {
 }
 
 export function derivedSkillTrainingStatus(requirement: CertificationRequirement): TrainingStatus {
-  if (requirement.training_status === 'UNKNOWN' && requirement.evidence_available.length === 0
-    && skillDisplayForRequirement(requirement.requirement_id)) {
-    return 'UNTESTED'
+  if (requirement.training_status === 'READY_FOR_REVIEW' || requirement.training_status === 'EVIDENCE_CAPTURED') {
+    return requirement.training_status
   }
-  return requirement.training_status
+  if (!skillDisplayForRequirement(requirement.requirement_id)) {
+    return requirement.training_status
+  }
+  const count = requirement.evidence_available.length
+  if (count === 0) return 'UNTESTED'
+  if (count === 1) return 'BASELINE_MEASURED'
+  return 'TRAINING'
 }
 
 export function removeSessionEvidence(core: CertificationCore, sessionId: string): CertificationCore {
@@ -201,11 +395,10 @@ export function removeSessionEvidence(core: CertificationCore, sessionId: string
   core.evidence = core.evidence.filter((item) => !prefixes.some((prefix) => item.evidence_id.startsWith(prefix)))
   for (const requirement of core.requirements) {
     requirement.evidence_available = requirement.evidence_available.filter((id) => !prefixes.some((prefix) => id.startsWith(prefix)))
-    if (requirement.evidence_available.length === 0
-      && (requirement.training_status === 'BASELINE_MEASURED' || requirement.training_status === 'TRAINING'
-        || requirement.training_status === 'READY_FOR_REVIEW' || requirement.training_status === 'EVIDENCE_CAPTURED')) {
-      requirement.training_status = 'UNTESTED'
+    if (requirement.training_status === 'READY_FOR_REVIEW' || requirement.training_status === 'EVIDENCE_CAPTURED') {
+      continue
     }
+    requirement.training_status = derivedSkillTrainingStatus(requirement)
   }
   return core
 }
@@ -437,9 +630,8 @@ export function refreshCertificationCore(existing: CertificationCore): Certifica
       last_verified_at: old.last_verified_at,
       blocking_reason: old.blocking_reason,
     }
-    if (skillDisplayForRequirement(merged.requirement_id)
-      && merged.training_status === 'UNKNOWN' && merged.evidence_available.length === 0) {
-      merged.training_status = 'UNTESTED'
+    if (skillDisplayForRequirement(merged.requirement_id)) {
+      merged.training_status = derivedSkillTrainingStatus(merged)
     }
     return merged
   })
@@ -470,6 +662,12 @@ export function migrateAppRecord(raw: unknown, defaults: Omit<AppRecord, 'certif
     throw new Error('BLOCKED_MIGRATION_RISK: sessions 不是数组，未写入数据')
   }
   const record = { ...defaults, ...original } as AppRecord
+  if (!record.pciTaskStatus || typeof record.pciTaskStatus !== 'object' || Array.isArray(record.pciTaskStatus)) {
+    record.pciTaskStatus = {}
+  }
+  if (!Array.isArray(record.pciTaskEvidence)) {
+    record.pciTaskEvidence = []
+  }
   if (!record.certificationCore) {
     record.certificationCore = createCertificationCore(record.sessions)
   } else {
@@ -512,10 +710,8 @@ export function appendTrainingSessionEvidence(
     }
     nextCore.evidence.push(evidence)
     item.evidence_available.push(evidenceId)
-    if (item.training_status === 'BASELINE_MEASURED' || item.training_status === 'TRAINING') {
-      item.training_status = 'TRAINING'
-    } else {
-      item.training_status = 'BASELINE_MEASURED'
+    if (item.training_status !== 'READY_FOR_REVIEW' && item.training_status !== 'EVIDENCE_CAPTURED') {
+      item.training_status = derivedSkillTrainingStatus(item)
     }
     item.next_action = '继续针对性训练；此记录不是 IPTPA 官方评分'
     nextSession.requirementIds.push(requirementId)
